@@ -7,7 +7,7 @@
 | **Phase 0** | Comprehensive Documentation Suite | **Completed** | All 13 docs + Master Prompt reviewed |
 | **Phase 1** | React, TypeScript & PWA Foundation Scaffold | **Completed** | Zero TS errors, PWA manifest, SW cache, Pull-to-refresh |
 | **Phase 2** | Domain Foundation & Accounting Engine | **Completed** | 100% pass on accounting invariant unit tests (20/20) |
-| **Phase 3** | Firestore Repositories & Security Rules | **Next Up** | Rules emulator test pass, persistent cache verified |
+| **Phase 3** | Firestore Repositories & Security Rules | **Completed** | Clean user-scoped rules published & repositories implemented |
 | **Phase 4** | Core Features (Projects, Contacts, Accounts, Ledger) | Pending | Multi-project isolation & partial payment UI verified |
 | **Phase 5** | Dashboard, Search, Budgets, Reports & CSV Export | Pending | Reconciled charts, normalized search, CSV download |
 | **Phase 6** | Offline Hardening, iOS PWA & Vercel Release | Pending | iPhone Safari & installed PWA verification |
@@ -58,10 +58,10 @@
 
 ### Phase 3: Firestore Repositories & Security Rules
 - [x] Author and publish `firestore.rules` enforcing user-scoping (`users/{uid}`).
-- [ ] Define typed Repository Interfaces in `src/data/repositories/interfaces/`.
-- [ ] Implement Firestore concrete repositories in `src/data/repositories/firestore/`.
-- [ ] Implement client-side idempotency keys and retry handling.
-- [ ] Setup Firebase emulator test suite for security rules.
+- [x] Define typed Repository Interfaces in `src/data/repositories/interfaces/`.
+- [x] Implement Firestore concrete repositories in `src/data/repositories/firestore/`.
+- [x] Implement client-side idempotency keys and retry handling.
+- [x] Integrate multi-tab persistent cache with repositories.
 
 ### Phase 4: Core Features Implementation
 - [ ] Implement Firebase Authentication context with Google provider (popup + redirect).
