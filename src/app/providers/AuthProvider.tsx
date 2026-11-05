@@ -174,40 +174,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, [configured]);
 
-  // Auto-recovery: when user closes or dismisses the Google sign-in window on mobile/desktop
+  // Auto-recovery: cleanly reset button when user closes/dismisses Google OAuth window
   useEffect(() => {
     if (!isSigningIn) return;
 
-    let graceTimer: ReturnType<typeof setTimeout> | null = null;
+    let wasHidden = false;
+    let returnTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const handleWindowActive = () => {
-      // When the user returns to our app tab/window
-      if (document.visibilityState === 'visible') {
-        if (graceTimer) clearTimeout(graceTimer);
-        // Give 800ms for Firebase onAuthStateChanged to settle if auth succeeded
-        graceTimer = setTimeout(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        wasHidden = true;
+      } else if (document.visibilityState === 'visible' && wasHidden) {
+        // User returned to our app after Google popup was opened and dismissed
+        if (returnTimer) clearTimeout(returnTimer);
+        returnTimer = setTimeout(() => {
           if (!auth.currentUser) {
             setIsSigningIn(false);
           }
-        }, 800);
+        }, 1200);
       }
     };
 
-    window.addEventListener('focus', handleWindowActive);
-    document.addEventListener('visibilitychange', handleWindowActive);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Hard fallback timeout: never allow button to hang for more than 15s
-    const maxTimeout = setTimeout(() => {
+    // Global watchdog fallback: maximum 20s if popup hangs indefinitely
+    const watchdog = setTimeout(() => {
       if (!auth.currentUser) {
         setIsSigningIn(false);
       }
-    }, 15000);
+    }, 20000);
 
     return () => {
-      if (graceTimer) clearTimeout(graceTimer);
-      clearTimeout(maxTimeout);
-      window.removeEventListener('focus', handleWindowActive);
-      document.removeEventListener('visibilitychange', handleWindowActive);
+      if (returnTimer) clearTimeout(returnTimer);
+      clearTimeout(watchdog);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isSigningIn]);
 
