@@ -32,11 +32,6 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Disable pull-to-refresh native bounce on body to prevent conflict with custom gesture */
-body {
-  overscroll-behavior-y: none;
-}
-
 /* Apple Liquid Glass Accents */
 .glass-surface {
   background: rgba(255, 255, 255, 0.7);

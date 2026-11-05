@@ -21,7 +21,7 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({
   children
 }) => {
   return (
-    <div className="flex flex-col h-screen w-full bg-background-light dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
+    <div className="flex flex-col h-[100dvh] w-full bg-background-light dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
       {/* Glisse Liquid Glass Top App Bar */}
       <TopHeader title={title} subtitle={subtitle} />
 

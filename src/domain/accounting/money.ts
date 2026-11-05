@@ -29,6 +29,10 @@ export class Money {
     return new Money(0, currency);
   }
 
+  static format(minorUnits: number, currency: string = 'PKR', locale: string = 'en-PK'): string {
+    return Money.fromMinor(minorUnits, currency).format(locale);
+  }
+
   add(other: Money): Money {
     this.assertMatchingCurrency(other);
     return new Money(this.minorUnits + other.minorUnits, this.currency);

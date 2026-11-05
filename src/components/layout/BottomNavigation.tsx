@@ -41,7 +41,10 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   return (
     <nav 
       aria-label="Bottom Navigation"
-      className="fixed bottom-0 left-0 right-0 z-40 pb-[max(0.75rem,env(safe-area-inset-bottom))] pointer-events-none flex justify-center px-3"
+      className="fixed left-0 right-0 z-40 pointer-events-none flex justify-center px-3"
+      style={{
+        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)'
+      }}
     >
       {/* Glisse Apple Liquid Glass Dock: Centered together with no desktop gap and no mobile squeeze */}
       <div className="flex items-center justify-center gap-2 pointer-events-auto">

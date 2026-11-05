@@ -117,8 +117,8 @@ export class DomainUseCases {
   }
 
   static createPurchaseObligation(params: {
-    projectId: string;
-    contactId: string;
+    projectId?: string;
+    contactId?: string;
     title: string;
     date: string;
     totalAmountMinor: number;

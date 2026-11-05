@@ -8,8 +8,8 @@
 | **Phase 1** | React, TypeScript & PWA Foundation Scaffold | **Completed** | Zero TS errors, PWA manifest, SW cache, Pull-to-refresh |
 | **Phase 2** | Domain Foundation & Accounting Engine | **Completed** | 100% pass on accounting invariant unit tests (20/20) |
 | **Phase 3** | Firestore Repositories & Security Rules | **Completed** | Clean user-scoped rules published & repositories implemented |
-| **Phase 4** | Core Features (Projects, Contacts, Accounts, Ledger) | Pending | Multi-project isolation & partial payment UI verified |
-| **Phase 5** | Dashboard, Search, Budgets, Reports & CSV Export | Pending | Reconciled charts, normalized search, CSV download |
+| **Phase 4** | Core Features (Projects, Contacts, Accounts, Ledger) | **Completed** | Multi-project isolation, latest payment, transfer & Quick Add verified |
+| **Phase 5** | Dashboard, Search, Budgets, Reports & CSV Export | **Next Up** | Reconciled charts, normalized search, CSV download |
 | **Phase 6** | Offline Hardening, iOS PWA & Vercel Release | Pending | iPhone Safari & installed PWA verification |
 | **Phase 7** | A11y, Performance Audit, Security & Final Handoff | Pending | WCAG AA compliance, Lighthouse score > 90 |
 
@@ -64,12 +64,12 @@
 - [x] Integrate multi-tab persistent cache with repositories.
 
 ### Phase 4: Core Features Implementation
-- [ ] Implement Firebase Authentication context with Google provider (popup + redirect).
-- [ ] Build Project Management module (create, list, detail, budget tracking).
-- [ ] Build Contact Directory (create, multiple roles, master profile, project breakdown).
-- [ ] Build Accounts & Inter-Account Transfer module.
-- [ ] Build Obligation & Payment Entry modal (purchases, staged payments, advances).
-- [ ] Build Instant Latest Payment lookup widget.
+- [x] Implement Firebase Authentication context with Google provider (popup + redirect) with Glisse styling (`AuthProvider.tsx`).
+- [x] Build Project Management module (create, list, detail, budget tracking) with Glisse cards & forms (`ProjectsView.tsx`).
+- [x] Build Contact Directory (create, multiple roles, master profile, project breakdown) with Glisse cards & forms (`ContactsView.tsx`).
+- [x] Build Accounts & Inter-Account Transfer module with Glisse cards & forms (`AccountsView.tsx`).
+- [x] Build Obligation & Payment Entry modal (purchases, staged payments, advances) with Glisse inputs & buttons (`QuickAddModal.tsx`).
+- [x] Build Instant Latest Payment lookup widget.
 
 ### Phase 5: Dashboard, Search, Budgets & Reports
 - [ ] Build Executive Dashboard with dynamic time horizons and project filters.
