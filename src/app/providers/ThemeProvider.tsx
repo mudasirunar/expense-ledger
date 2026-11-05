@@ -45,9 +45,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (darkActive) {
         root.classList.add('dark');
         root.setAttribute('data-theme', 'dark');
+        root.style.backgroundColor = '#0B0F19';
+        document.body.style.backgroundColor = '#0B0F19';
       } else {
         root.classList.remove('dark');
         root.setAttribute('data-theme', 'light');
+        root.style.backgroundColor = '#E2DDD5';
+        document.body.style.backgroundColor = '#E2DDD5';
       }
 
       // Update PWA meta status bar theme color

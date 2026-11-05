@@ -221,12 +221,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (meta) meta.setAttribute('content', '#0B0F19');
     } else {
       document.title = 'Expense Ledger';
-      document.documentElement.style.backgroundColor = '';
-      document.body.style.backgroundColor = '';
+      const isDark = document.documentElement.classList.contains('dark') || document.documentElement.getAttribute('data-theme') === 'dark';
+      const themeColor = isDark ? '#0B0F19' : '#E2DDD5';
+      document.documentElement.style.backgroundColor = themeColor;
+      document.body.style.backgroundColor = themeColor;
       const meta = document.getElementById('theme-color-meta');
       if (meta) {
-        const isDark = document.documentElement.classList.contains('dark');
-        meta.setAttribute('content', isDark ? '#0B0F19' : '#E2DDD5');
+        meta.setAttribute('content', themeColor);
       }
     }
 

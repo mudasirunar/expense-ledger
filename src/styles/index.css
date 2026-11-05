@@ -24,10 +24,25 @@ html, body {
 
 /* Light mode main canvas background: distinct, warm, premium ledger paper (clearly not white) */
 html:not(.dark),
-body:not(.dark),
+html:not(.dark) body,
 html:not(.dark) #root,
 html:not(.dark) .bg-background-light {
   background-color: #E2DDD5 !important;
+}
+
+/* Dark mode main canvas background: seamless rubber-band overscroll matching theme */
+html.dark,
+html.dark body,
+html.dark #root,
+html.dark .dark\:bg-background {
+  background-color: #0B0F19 !important;
+}
+
+/* PWA Standalone layout: shift top bar slightly down to avoid iOS status bar scrim overlay */
+@media all and (display-mode: standalone) {
+  .pwa-top-spacer {
+    height: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+  }
 }
 
 /* Prevent horizontal scrollbars globally */

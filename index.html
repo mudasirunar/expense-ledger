@@ -28,11 +28,13 @@
           if (isDark) {
             html.classList.add('dark');
             html.setAttribute('data-theme', 'dark');
+            html.style.backgroundColor = '#0B0F19';
             var meta = document.getElementById('theme-color-meta');
             if (meta) meta.setAttribute('content', '#0B0F19');
           } else {
             html.classList.remove('dark');
             html.setAttribute('data-theme', 'light');
+            html.style.backgroundColor = '#E2DDD5';
             var meta = document.getElementById('theme-color-meta');
             if (meta) meta.setAttribute('content', '#E2DDD5');
           }
