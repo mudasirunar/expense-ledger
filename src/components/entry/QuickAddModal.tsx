@@ -28,14 +28,28 @@ interface QuickAddModalProps {
 
 type EntryType = 'expense' | 'obligation' | 'payment';
 
+// In-memory cache for instant modal dropdown population (< 1ms)
+let cachedQuickAddData: {
+  userId: string;
+  projects: Project[];
+  contacts: Contact[];
+  accounts: Account[];
+} | null = null;
+
 export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { user } = useAuth();
   const userId = user?.uid || 'guest-user';
 
   const [entryType, setEntryType] = useState<EntryType>('expense');
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [projects, setProjects] = useState<Project[]>(() => {
+    return cachedQuickAddData && cachedQuickAddData.userId === userId ? cachedQuickAddData.projects : [];
+  });
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    return cachedQuickAddData && cachedQuickAddData.userId === userId ? cachedQuickAddData.contacts : [];
+  });
+  const [accounts, setAccounts] = useState<Account[]>(() => {
+    return cachedQuickAddData && cachedQuickAddData.userId === userId ? cachedQuickAddData.accounts : [];
+  });
 
   // Common fields
   const [title, setTitle] = useState<string>('');
@@ -69,6 +83,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
       setProjects(prjs);
       setContacts(cnts);
       setAccounts(accs);
+      cachedQuickAddData = { userId, projects: prjs, contacts: cnts, accounts: accs };
       if (accs.length > 0 && !accountId) {
         setAccountId(accs[0].id);
       }

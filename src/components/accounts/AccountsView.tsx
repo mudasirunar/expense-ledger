@@ -19,12 +19,19 @@ import {
 const accountRepo = new FirestoreAccountRepository();
 const transactionRepo = new FirestoreTransactionRepository();
 
+// In-memory cache for instant (0ms) account switching
+let cachedAccounts: { userId: string; data: Account[] } | null = null;
+
 export const AccountsView: React.FC = () => {
   const { user } = useAuth();
   const userId = user?.uid || 'guest-user';
 
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [accounts, setAccounts] = useState<Account[]>(() => {
+    return cachedAccounts && cachedAccounts.userId === userId ? cachedAccounts.data : [];
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    return !(cachedAccounts && cachedAccounts.userId === userId);
+  });
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
   const [isTransferOpen, setIsTransferOpen] = useState<boolean>(false);
 
@@ -46,20 +53,34 @@ export const AccountsView: React.FC = () => {
   const [transferError, setTransferError] = useState<string | null>(null);
   const [transferring, setTransferring] = useState<boolean>(false);
 
-  const fetchAccounts = async () => {
-    setLoading(true);
-    try {
-      const data = await accountRepo.list(userId);
-      setAccounts(data);
-    } catch (err) {
-      console.warn('[Accounts] Load fallback:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Real-time cache-first synchronization: instant (< 10ms) from local cache
   useEffect(() => {
-    fetchAccounts();
+    let unsub: (() => void) | undefined;
+
+    if (accountRepo.subscribe) {
+      unsub = accountRepo.subscribe(
+        userId,
+        (data) => {
+          setAccounts(data);
+          cachedAccounts = { userId, data };
+          setLoading(false);
+        },
+        (err) => {
+          console.warn('[Accounts] Subscribe fallback:', err);
+          setLoading(false);
+        }
+      );
+    } else {
+      accountRepo.list(userId).then((data) => {
+        setAccounts(data);
+        cachedAccounts = { userId, data };
+        setLoading(false);
+      });
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
   }, [userId]);
 
   const totalLiquidityMinor = accounts.reduce((acc, a) => acc + a.currentBalanceMinor, 0);

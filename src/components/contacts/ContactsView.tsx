@@ -17,14 +17,21 @@ import {
 const contactRepo = new FirestoreContactRepository();
 const paymentRepo = new FirestorePaymentRepository();
 
+// In-memory cache for instant (0ms) contact switching
+let cachedContacts: { userId: string; data: Contact[] } | null = null;
+
 const ALL_ROLES: ContactRole[] = ['contractor', 'supplier', 'worker', 'customer', 'client', 'other'];
 
 export const ContactsView: React.FC = () => {
   const { user } = useAuth();
   const userId = user?.uid || 'guest-user';
 
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    return cachedContacts && cachedContacts.userId === userId ? cachedContacts.data : [];
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    return !(cachedContacts && cachedContacts.userId === userId);
+  });
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [latestPayment, setLatestPayment] = useState<Payment | null>(null);
@@ -40,20 +47,34 @@ export const ContactsView: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-  const fetchContacts = async () => {
-    setLoading(true);
-    try {
-      const data = await contactRepo.list(userId);
-      setContacts(data);
-    } catch (err) {
-      console.warn('[Contacts] Load fallback:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Real-time cache-first synchronization: instant (< 10ms) from local cache
   useEffect(() => {
-    fetchContacts();
+    let unsub: (() => void) | undefined;
+
+    if (contactRepo.subscribe) {
+      unsub = contactRepo.subscribe(
+        userId,
+        (data) => {
+          setContacts(data);
+          cachedContacts = { userId, data };
+          setLoading(false);
+        },
+        (err) => {
+          console.warn('[Contacts] Subscribe fallback:', err);
+          setLoading(false);
+        }
+      );
+    } else {
+      contactRepo.list(userId).then((data) => {
+        setContacts(data);
+        cachedContacts = { userId, data };
+        setLoading(false);
+      });
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
   }, [userId]);
 
   const handleSelectContact = async (contact: Contact) => {

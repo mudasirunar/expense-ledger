@@ -7,7 +7,8 @@ import {
   updateDoc, 
   deleteDoc,
   orderBy,
-  query
+  query,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '@/data/firebase/firestoreClient';
 import { Project } from '@/domain/entities';
@@ -29,6 +30,19 @@ export class FirestoreProjectRepository implements IProjectRepository {
     const q = query(this.getUserProjectsCollection(userId), orderBy('createdAt', 'desc'));
     const snap = await getDocs(q);
     return snap.docs.map((d) => d.data() as Project);
+  }
+
+  subscribe(userId: string, onUpdate: (projects: Project[]) => void, onError?: (error: Error) => void): () => void {
+    const q = query(this.getUserProjectsCollection(userId), orderBy('createdAt', 'desc'));
+    return onSnapshot(
+      q,
+      (snap) => {
+        onUpdate(snap.docs.map((d) => d.data() as Project));
+      },
+      (err) => {
+        if (onError) onError(err);
+      }
+    );
   }
 
   async create(userId: string, project: Project): Promise<void> {

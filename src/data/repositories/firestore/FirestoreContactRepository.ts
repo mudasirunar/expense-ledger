@@ -8,7 +8,8 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy
+  orderBy,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '@/data/firebase/firestoreClient';
 import { Contact } from '@/domain/entities';
@@ -30,6 +31,19 @@ export class FirestoreContactRepository implements IContactRepository {
     const q = query(this.getUserContactsCollection(userId), orderBy('name', 'asc'));
     const snap = await getDocs(q);
     return snap.docs.map((d) => d.data() as Contact);
+  }
+
+  subscribe(userId: string, onUpdate: (contacts: Contact[]) => void, onError?: (error: Error) => void): () => void {
+    const q = query(this.getUserContactsCollection(userId), orderBy('name', 'asc'));
+    return onSnapshot(
+      q,
+      (snap) => {
+        onUpdate(snap.docs.map((d) => d.data() as Contact));
+      },
+      (err) => {
+        if (onError) onError(err);
+      }
+    );
   }
 
   async listByProject(userId: string, projectId: string): Promise<Contact[]> {

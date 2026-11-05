@@ -8,6 +8,7 @@ import {
   query,
   where,
   orderBy,
+  onSnapshot,
   QueryConstraint
 } from 'firebase/firestore';
 import { db } from '@/data/firebase/firestoreClient';
@@ -51,6 +52,19 @@ export class FirestoreTransactionRepository implements ITransactionRepository {
     const q = query(this.getUserTransactionsCollection(userId), ...constraints);
     const snap = await getDocs(q);
     return snap.docs.map((d) => d.data() as Transaction);
+  }
+
+  subscribe(userId: string, onUpdate: (transactions: Transaction[]) => void, onError?: (error: Error) => void): () => void {
+    const q = query(this.getUserTransactionsCollection(userId), orderBy('date', 'desc'));
+    return onSnapshot(
+      q,
+      (snap) => {
+        onUpdate(snap.docs.map((d) => d.data() as Transaction));
+      },
+      (err) => {
+        if (onError) onError(err);
+      }
+    );
   }
 
   async create(userId: string, transaction: Transaction): Promise<void> {

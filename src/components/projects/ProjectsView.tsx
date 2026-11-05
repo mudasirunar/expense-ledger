@@ -16,12 +16,19 @@ import {
 
 const projectRepo = new FirestoreProjectRepository();
 
+// In-memory cache for instant (0ms) project switching
+let cachedProjects: { userId: string; data: Project[] } | null = null;
+
 export const ProjectsView: React.FC = () => {
   const { user } = useAuth();
   const userId = user?.uid || 'guest-user';
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [projects, setProjects] = useState<Project[]>(() => {
+    return cachedProjects && cachedProjects.userId === userId ? cachedProjects.data : [];
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    return !(cachedProjects && cachedProjects.userId === userId);
+  });
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
@@ -35,20 +42,34 @@ export const ProjectsView: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-  const fetchProjects = async () => {
-    setLoading(true);
-    try {
-      const data = await projectRepo.list(userId);
-      setProjects(data);
-    } catch (err) {
-      console.warn('[Projects] Load fallback:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Real-time cache-first synchronization: instant (< 10ms) from local cache
   useEffect(() => {
-    fetchProjects();
+    let unsub: (() => void) | undefined;
+
+    if (projectRepo.subscribe) {
+      unsub = projectRepo.subscribe(
+        userId,
+        (data) => {
+          setProjects(data);
+          cachedProjects = { userId, data };
+          setLoading(false);
+        },
+        (err) => {
+          console.warn('[Projects] Subscribe fallback:', err);
+          setLoading(false);
+        }
+      );
+    } else {
+      projectRepo.list(userId).then((data) => {
+        setProjects(data);
+        cachedProjects = { userId, data };
+        setLoading(false);
+      });
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
   }, [userId]);
 
   const handleCreateProject = async (e: React.FormEvent) => {

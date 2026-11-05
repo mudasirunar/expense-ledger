@@ -6,7 +6,8 @@ import {
   setDoc, 
   updateDoc, 
   query,
-  orderBy
+  orderBy,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '@/data/firebase/firestoreClient';
 import { Account } from '@/domain/entities';
@@ -28,6 +29,19 @@ export class FirestoreAccountRepository implements IAccountRepository {
     const q = query(this.getUserAccountsCollection(userId), orderBy('name', 'asc'));
     const snap = await getDocs(q);
     return snap.docs.map((d) => d.data() as Account);
+  }
+
+  subscribe(userId: string, onUpdate: (accounts: Account[]) => void, onError?: (error: Error) => void): () => void {
+    const q = query(this.getUserAccountsCollection(userId), orderBy('name', 'asc'));
+    return onSnapshot(
+      q,
+      (snap) => {
+        onUpdate(snap.docs.map((d) => d.data() as Account));
+      },
+      (err) => {
+        if (onError) onError(err);
+      }
+    );
   }
 
   async create(userId: string, account: Account): Promise<void> {
