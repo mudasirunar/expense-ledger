@@ -16,13 +16,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ title, subtitle }) => {
   const { user, signOutUser } = useAuth();
 
   return (
-    <header 
-      className="sticky top-0 z-30 w-full bg-[var(--lg-surface)] backdrop-blur-2xl border-b border-[var(--lg-surface-edge)] px-4 flex items-center justify-between select-none transition-colors duration-200"
-      style={{
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.65rem)',
-        paddingBottom: '0.65rem'
-      }}
-    >
+    <header className="z-30 w-full bg-[var(--lg-surface)] border-b border-[var(--lg-surface-edge)] px-4 py-2.5 flex items-center justify-between select-none transition-colors duration-200">
       <div>
         <h1 className="text-base font-extrabold text-[var(--lg-foreground)] tracking-tight">{title}</h1>
         {subtitle && <p className="text-xs text-[var(--lg-muted)] font-medium">{subtitle}</p>}

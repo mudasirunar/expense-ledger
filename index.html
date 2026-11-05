@@ -13,6 +13,10 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Expense Ledger</title>
 
+    <!-- Immediate Preload for Sign-In Backgrounds (0ms First Contentful Paint) -->
+    <link rel="preload" as="image" href="/images/auth/bg-mobile.webp" type="image/webp" media="(max-width: 767px)" fetchpriority="high" />
+    <link rel="preload" as="image" href="/images/auth/bg-desktop.webp" type="image/webp" media="(min-width: 768px)" fetchpriority="high" />
+
     <!-- Synchronous Anti-Flicker Theme Script: sets both class and data-theme for Glisse -->
     <script>
       (function() {

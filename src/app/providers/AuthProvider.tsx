@@ -174,6 +174,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, [configured]);
 
+  // Auto-recovery: when user closes or dismisses the Google sign-in window on mobile/desktop
+  useEffect(() => {
+    if (!isSigningIn) return;
+
+    let graceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleWindowActive = () => {
+      // When the user returns to our app tab/window
+      if (document.visibilityState === 'visible') {
+        if (graceTimer) clearTimeout(graceTimer);
+        // Give 800ms for Firebase onAuthStateChanged to settle if auth succeeded
+        graceTimer = setTimeout(() => {
+          if (!auth.currentUser) {
+            setIsSigningIn(false);
+          }
+        }, 800);
+      }
+    };
+
+    window.addEventListener('focus', handleWindowActive);
+    document.addEventListener('visibilitychange', handleWindowActive);
+
+    // Hard fallback timeout: never allow button to hang for more than 15s
+    const maxTimeout = setTimeout(() => {
+      if (!auth.currentUser) {
+        setIsSigningIn(false);
+      }
+    }, 15000);
+
+    return () => {
+      if (graceTimer) clearTimeout(graceTimer);
+      clearTimeout(maxTimeout);
+      window.removeEventListener('focus', handleWindowActive);
+      document.removeEventListener('visibilitychange', handleWindowActive);
+    };
+  }, [isSigningIn]);
+
+  // Synchronize document title, HTML/body background & theme-color with sign-in screen (neutral dark, no golden color)
+  useEffect(() => {
+    if (configured && !user && !loading) {
+      document.title = 'Sign in | Expense Ledger';
+      document.documentElement.style.backgroundColor = '#0B0F19';
+      document.body.style.backgroundColor = '#0B0F19';
+      const meta = document.getElementById('theme-color-meta');
+      if (meta) meta.setAttribute('content', '#0B0F19');
+    } else {
+      document.title = 'Expense Ledger';
+      document.documentElement.style.backgroundColor = '';
+      document.body.style.backgroundColor = '';
+      const meta = document.getElementById('theme-color-meta');
+      if (meta) {
+        const isDark = document.documentElement.classList.contains('dark');
+        meta.setAttribute('content', isDark ? '#0B0F19' : '#F8FAFC');
+      }
+    }
+
+    return () => {
+      document.title = 'Expense Ledger';
+      document.documentElement.style.backgroundColor = '';
+      document.body.style.backgroundColor = '';
+    };
+  }, [configured, user, loading]);
+
   const signInWithGoogle = async () => {
     if (isSigningIn) return;
     setIsSigningIn(true);
@@ -183,12 +246,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await signInWithPopup(auth, googleAuthProvider);
     } catch (err: unknown) {
       const authErr = err as { code?: string; message?: string };
-      // User closed popup or cancelled: cleanly revert button without error or redirect
+      // User closed popup, cancelled, or popup was dismissed: cleanly revert button
       if (
         authErr?.code === 'auth/popup-closed-by-user' ||
-        authErr?.code === 'auth/cancelled-popup-request'
+        authErr?.code === 'auth/cancelled-popup-request' ||
+        authErr?.code === 'auth/popup-blocked'
       ) {
-        // Normal user cancellation - do not redirect and do not show error
+        // Normal user cancellation - do not show error banner
       } else {
         setError(authErr?.message || 'Authentication failed. Please try again.');
       }
@@ -218,10 +282,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   }
 
-  // When unauthenticated, display simple flat sign-in screen with responsive edge-to-edge background (fixed & non-overflowing)
+  // When unauthenticated, display simple flat sign-in screen with edge-to-edge full screen background
   if (configured && !user) {
     return (
-      <div className="fixed inset-0 h-[100dvh] w-full flex flex-col items-center justify-center p-6 bg-[#eee1d1] select-none overflow-hidden">
+      <div 
+        className="fixed inset-0 w-full h-full min-h-screen min-h-[100dvh] flex flex-col items-center justify-center bg-[#eee1d1] select-none overflow-hidden"
+        style={{
+          paddingTop: 'max(1.5rem, env(safe-area-inset-top, 0px))',
+          paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))',
+          paddingLeft: 'max(1.5rem, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(1.5rem, env(safe-area-inset-right, 0px))',
+        }}
+      >
         {/* Layer 0: Edge-to-edge responsive WebP background */}
         <picture className="absolute inset-0 w-full h-full pointer-events-none z-0">
           <source
@@ -233,12 +305,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             src="/images/auth/bg-mobile.webp"
             alt=""
             aria-hidden="true"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
             className="w-full h-full object-cover object-center"
           />
         </picture>
 
-        {/* Layer 1: Ambient overlay to guarantee contrast & legibility across light & dark themes */}
-        <div className="absolute inset-0 bg-black/10 dark:bg-black/30 backdrop-blur-[0.5px] pointer-events-none z-0" />
+        {/* Layer 1: Ambient dimming overlay with tuned brightness for optimal UI contrast */}
+        <div className="absolute inset-0 bg-black/[0.06] dark:bg-black/20 pointer-events-none z-0" />
 
         {/* Layer 2: Foreground content */}
         <div className="relative z-10 flex flex-col items-center text-center space-y-4 md:space-y-6 max-w-sm md:max-w-md w-full px-4">
