@@ -16,14 +16,15 @@ import { Glass, SegmentedControl } from 'glisse';
 const accountRepo = new FirestoreAccountRepository();
 const transactionRepo = new FirestoreTransactionRepository();
 
-// Animated bouncing dots for loading currency metrics
+// Animated bouncing dots with visible vertical wave movement
 const LoadingDots: React.FC<{ size?: 'sm' | 'md' }> = ({ size = 'md' }) => {
-  const dotClass = size === 'sm' ? 'w-1 h-1' : 'w-1.5 h-1.5';
+  const dotSize = size === 'sm' ? 'w-1.5 h-1.5' : 'w-2 h-2';
+  const animClass = size === 'sm' ? 'animate-dot-wave-sm' : 'animate-dot-wave-md';
   return (
-    <span className="inline-flex items-center gap-1 ml-1.5 align-middle">
-      <span className={`${dotClass} rounded-full bg-current animate-bounce [animation-delay:-0.3s] opacity-75`} />
-      <span className={`${dotClass} rounded-full bg-current animate-bounce [animation-delay:-0.15s] opacity-75`} />
-      <span className={`${dotClass} rounded-full bg-current animate-bounce opacity-75`} />
+    <span className="inline-flex items-center gap-1.5 ml-1.5 align-middle">
+      <span className={`${dotSize} rounded-full bg-current ${animClass}`} style={{ animationDelay: '0s' }} />
+      <span className={`${dotSize} rounded-full bg-current ${animClass}`} style={{ animationDelay: '0.15s' }} />
+      <span className={`${dotSize} rounded-full bg-current ${animClass}`} style={{ animationDelay: '0.3s' }} />
     </span>
   );
 };
@@ -103,7 +104,7 @@ const DashboardOverview: React.FC<{ onRefreshKey: number }> = ({ onRefreshKey })
             <span className="text-3xl font-black text-[var(--lg-foreground)] tabular-nums tracking-tight">
               {loading ? (
                 <span className="inline-flex items-center">
-                  PKR <LoadingDots size="md" />
+                  Rs <LoadingDots size="md" />
                 </span>
               ) : (
                 Money.format(totalCashMinor)
@@ -120,7 +121,7 @@ const DashboardOverview: React.FC<{ onRefreshKey: number }> = ({ onRefreshKey })
             <p className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm mt-0.5 tabular-nums">
               {loading ? (
                 <span className="inline-flex items-center">
-                  PKR <LoadingDots size="sm" />
+                  Rs <LoadingDots size="sm" />
                 </span>
               ) : (
                 Money.format(totalInflowMinor)
@@ -134,7 +135,7 @@ const DashboardOverview: React.FC<{ onRefreshKey: number }> = ({ onRefreshKey })
             <p className="font-extrabold text-rose-600 dark:text-rose-400 text-sm mt-0.5 tabular-nums">
               {loading ? (
                 <span className="inline-flex items-center">
-                  PKR <LoadingDots size="sm" />
+                  Rs <LoadingDots size="sm" />
                 </span>
               ) : (
                 Money.format(totalOutflowMinor)

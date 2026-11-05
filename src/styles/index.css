@@ -52,3 +52,34 @@ html, body {
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+/* Dynamic wave bounce for loading metrics with prominent vertical travel */
+@keyframes dot-wave-md {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+@keyframes dot-wave-sm {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.animate-dot-wave-md {
+  animation: dot-wave-md 0.75s ease-in-out infinite;
+}
+
+.animate-dot-wave-sm {
+  animation: dot-wave-sm 0.75s ease-in-out infinite;
+}
