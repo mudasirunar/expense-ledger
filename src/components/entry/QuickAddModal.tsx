@@ -10,8 +10,9 @@ import {
 } from '@/data/repositories/firestore';
 import { DomainUseCases } from '@/domain/usecases';
 import { useAuth } from '@/app/providers/AuthProvider';
-import { Glass, Button, Input, SegmentedControl } from 'glisse';
+import { Button, Input, SegmentedControl } from 'glisse';
 import { X, AlertCircle } from 'lucide-react';
+import { ModalPortal } from '@/components/common/ModalPortal';
 
 const projectRepo = new FirestoreProjectRepository();
 const contactRepo = new FirestoreContactRepository();
@@ -181,36 +182,37 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <Glass className="w-full max-w-md p-6 rounded-3xl space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between pb-2 border-b border-[var(--lg-separator)]">
-          <div>
-            <h3 className="text-base font-extrabold text-[var(--lg-foreground)]">Record Financial Entry</h3>
-            <p className="text-[11px] text-[var(--lg-muted)]">Immediate double-entry ledger capture</p>
+    <ModalPortal isOpen={isOpen}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/20 dark:bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+        <div className="w-full max-w-md p-4 sm:p-6 rounded-3xl space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl">
+          <div className="flex items-center justify-between pb-2 border-b border-[var(--lg-separator)]">
+            <div>
+              <h3 className="text-base font-extrabold text-[var(--lg-foreground)]">Record Financial Entry</h3>
+              <p className="text-[11px] text-[var(--lg-muted)]">Immediate double-entry ledger capture</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-full text-[var(--lg-muted)] hover:text-[var(--lg-foreground)]"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-full text-[var(--lg-muted)] hover:text-[var(--lg-foreground)]"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
-        {/* Glisse Segmented Control for entry type */}
-        <div className="flex justify-center w-full">
-          <SegmentedControl
-            items={[
-              { value: 'expense', label: 'Expense' },
-              { value: 'obligation', label: 'Bill / PO' },
-              { value: 'payment', label: 'Disbursement' },
-            ]}
-            value={entryType}
-            onValueChange={(val) => {
-              if (val) setEntryType(val as EntryType);
-            }}
-            style={{ '--lg-tab-width': '105px' } as React.CSSProperties}
-          />
-        </div>
+          {/* Glisse Segmented Control for entry type - exact same implementation as dashboard */}
+          <div className="flex justify-center w-full py-2">
+            <SegmentedControl
+              items={[
+                { value: 'expense', label: 'Expense' },
+                { value: 'obligation', label: 'Bill / PO' },
+                { value: 'payment', label: 'Disbursement' },
+              ]}
+              value={entryType}
+              onValueChange={(val) => {
+                if (val) setEntryType(val as EntryType);
+              }}
+              style={{ '--lg-tab-width': '105px' } as React.CSSProperties}
+            />
+          </div>
 
         {error && (
           <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-600 dark:text-rose-400 flex items-center gap-2">
@@ -220,83 +222,82 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          {/* Obligation / Material Details if obligation */}
-          {entryType === 'obligation' ? (
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-                  Item Description *
-                </label>
-                <Input
-                  placeholder="e.g. Falcon Cement (Grade 53)"
-                  value={title}
-                  onValueChange={(val) => {
-                    setTitle(val);
-                    setItemName(val);
-                  }}
-                  className="!max-w-none"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-                    Qty
-                  </label>
-                  <Input
-                    type="number"
-                    placeholder="100"
-                    value={quantity}
-                    onValueChange={setQuantity}
-                    className="!max-w-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-                    Unit
-                  </label>
-                  <Input
-                    placeholder="bags/tons"
-                    value={unit}
-                    onValueChange={setUnit}
-                    className="!max-w-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-                    Unit Price
-                  </label>
-                  <Input
-                    type="number"
-                    placeholder="PKR"
-                    value={unitPriceStr}
-                    onValueChange={setUnitPriceStr}
-                    className="!max-w-none"
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
+          {/* Obligation / Material Details (persistent DOM for 0ms lag-free tab switching) */}
+          <div className={entryType === 'obligation' ? 'space-y-3' : 'hidden'}>
             <div>
               <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-                Description / Memo *
+                Item Description *
               </label>
               <Input
-                placeholder="e.g. Fuel for generator or site lunch"
+                placeholder="e.g. Falcon Cement (Grade 53)"
                 value={title}
-                onValueChange={setTitle}
+                onValueChange={(val) => {
+                  setTitle(val);
+                  setItemName(val);
+                }}
                 className="!max-w-none"
-                required
+                required={entryType === 'obligation'}
               />
             </div>
-          )}
+
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
+                  Qty
+                </label>
+                <Input
+                  type="number"
+                  placeholder="100"
+                  value={quantity}
+                  onValueChange={setQuantity}
+                  className="!max-w-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
+                  Unit
+                </label>
+                <Input
+                  placeholder="bags/tons"
+                  value={unit}
+                  onValueChange={setUnit}
+                  className="!max-w-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
+                  Unit Price
+                </label>
+                <Input
+                  type="number"
+                  placeholder="Rs"
+                  value={unitPriceStr}
+                  onValueChange={setUnitPriceStr}
+                  className="!max-w-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Standard Memo for Expense and Payment */}
+          <div className={entryType !== 'obligation' ? 'block' : 'hidden'}>
+            <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
+              Description / Memo *
+            </label>
+            <Input
+              placeholder="e.g. Fuel for generator or site lunch"
+              value={title}
+              onValueChange={setTitle}
+              className="!max-w-none"
+              required={entryType !== 'obligation'}
+            />
+          </div>
 
           {/* Amount and Date */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-                Total Amount (PKR) *
+              <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
+                Total Amount (Rs) *
               </label>
               <Input
                 type="number"
@@ -308,7 +309,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
               />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
                 Date
               </label>
               <Input
@@ -323,13 +324,13 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
           {/* Project and Account */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
                 Cost Center / Project
               </label>
               <select
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
-                className="w-full h-10 px-3 rounded-2xl bg-[var(--lg-muted)]/10 border border-[var(--lg-surface-edge)] text-[var(--lg-foreground)] text-xs font-medium focus:outline-none"
+                className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
               >
                 <option value="">Personal / General Overhead</option>
                 {projects.map((p) => (
@@ -340,86 +341,80 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
               </select>
             </div>
 
-            {entryType !== 'obligation' && (
-              <div>
-                <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-                  Paid From Account *
-                </label>
-                <select
-                  value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  className="w-full h-10 px-3 rounded-2xl bg-[var(--lg-muted)]/10 border border-[var(--lg-surface-edge)] text-[var(--lg-foreground)] text-xs font-medium focus:outline-none"
-                  required
-                >
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div className={entryType !== 'obligation' ? 'block' : 'hidden'}>
+              <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
+                Paid From Account *
+              </label>
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
+                required={entryType !== 'obligation'}
+              >
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            {entryType === 'obligation' && (
-              <div>
-                <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-                  Supplier / Vendor Contact
-                </label>
-                <select
-                  value={contactId}
-                  onChange={(e) => setContactId(e.target.value)}
-                  className="w-full h-10 px-3 rounded-2xl bg-[var(--lg-muted)]/10 border border-[var(--lg-surface-edge)] text-[var(--lg-foreground)] text-xs font-medium focus:outline-none"
-                >
-                  <option value="">None / Anonymous</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div className={entryType === 'obligation' ? 'block' : 'hidden'}>
+              <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
+                Supplier / Vendor Contact
+              </label>
+              <select
+                value={contactId}
+                onChange={(e) => setContactId(e.target.value)}
+                className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="">None / Anonymous</option>
+                {contacts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Recipient Contact & Payment Method for Payments */}
-          {entryType === 'payment' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-                  Disbursed To Contact *
-                </label>
-                <select
-                  value={contactId}
-                  onChange={(e) => setContactId(e.target.value)}
-                  className="w-full h-10 px-3 rounded-2xl bg-[var(--lg-muted)]/10 border border-[var(--lg-surface-edge)] text-[var(--lg-foreground)] text-xs font-medium focus:outline-none"
-                  required
-                >
-                  <option value="">Select recipient</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.roles.join(', ')})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-                  Payment Method
-                </label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                  className="w-full h-10 px-3 rounded-2xl bg-[var(--lg-muted)]/10 border border-[var(--lg-surface-edge)] text-[var(--lg-foreground)] text-xs font-medium focus:outline-none"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="mobile_wallet">Mobile Wallet</option>
-                </select>
-              </div>
+          <div className={entryType === 'payment' ? 'grid grid-cols-2 gap-3' : 'hidden'}>
+            <div>
+              <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
+                Disbursed To Contact *
+              </label>
+              <select
+                value={contactId}
+                onChange={(e) => setContactId(e.target.value)}
+                className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
+                required={entryType === 'payment'}
+              >
+                <option value="">Select recipient</option>
+                {contacts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.roles.join(', ')})
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
+
+            <div>
+              <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
+                Payment Method
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="cash">Cash</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="cheque">Cheque</option>
+                <option value="mobile_wallet">Mobile Wallet</option>
+              </select>
+            </div>
+          </div>
 
           {/* Notes / Memo */}
           <div>
@@ -454,7 +449,8 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
             </Button>
           </div>
         </form>
-      </Glass>
+      </div>
     </div>
-  );
+  </ModalPortal>
+);
 };

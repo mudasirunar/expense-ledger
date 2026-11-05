@@ -13,6 +13,7 @@ import {
   TrendingUp, 
   AlertCircle
 } from 'lucide-react';
+import { ModalPortal } from '@/components/common/ModalPortal';
 
 const projectRepo = new FirestoreProjectRepository();
 
@@ -260,8 +261,9 @@ export const ProjectsView: React.FC = () => {
 
       {/* Create Project Modal */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <Glass className="w-full max-w-md p-6 rounded-3xl space-y-5 shadow-2xl">
+        <ModalPortal isOpen={isCreateOpen}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/20 dark:bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+            <div className="w-full max-w-md p-4 sm:p-6 rounded-3xl space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--lg-separator)]">
               <div>
                 <h3 className="text-base font-extrabold text-[var(--lg-foreground)]">Create New Project</h3>
@@ -301,7 +303,7 @@ export const ProjectsView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1.5">
+                  <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1.5 min-h-[1.75rem] flex items-end">
                     Project Code
                   </label>
                   <Input
@@ -312,8 +314,8 @@ export const ProjectsView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1.5">
-                    Budget (PKR)
+                  <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1.5 min-h-[1.75rem] flex items-end">
+                    Budget (Rs)
                   </label>
                   <Input
                     type="number"
@@ -385,14 +387,16 @@ export const ProjectsView: React.FC = () => {
                 </Button>
               </div>
             </form>
-          </Glass>
+          </div>
         </div>
-      )}
+      </ModalPortal>
+    )}
 
       {/* Project Detail Modal */}
       {selectedProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <Glass className="w-full max-w-md p-6 rounded-3xl space-y-5 shadow-2xl">
+        <ModalPortal isOpen={Boolean(selectedProject)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/20 dark:bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+            <div className="w-full max-w-md p-4 sm:p-6 rounded-3xl space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl">
             <div className="flex items-start justify-between pb-3 border-b border-[var(--lg-separator)]">
               <div>
                 <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${getStatusBadge(selectedProject.status)}`}>
@@ -468,9 +472,10 @@ export const ProjectsView: React.FC = () => {
                 Close
               </Button>
             </div>
-          </Glass>
+          </div>
         </div>
-      )}
+      </ModalPortal>
+    )}
     </div>
   );
 };

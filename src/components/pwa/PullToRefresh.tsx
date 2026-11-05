@@ -59,6 +59,13 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
 
     const onTouchStart = (e: TouchEvent) => {
       if (isRefreshing || pullStatusRef.current === 'refreshing') return;
+      
+      // Completely disable app pull-to-refresh if any modal dialog is currently open
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('.fixed.z-50, [role="dialog"], [data-modal]') || document.querySelector('.fixed.z-50')) {
+        return;
+      }
+
       if (container.scrollTop > 1) return;
 
       startYRef.current = e.touches[0].clientY;
@@ -71,6 +78,15 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
 
     const onTouchMove = (e: TouchEvent) => {
       if (!isDraggingRef.current || isRefreshing || pullStatusRef.current === 'refreshing') return;
+
+      // If a modal opened or user is inside a modal, cancel pull immediately
+      if (document.querySelector('.fixed.z-50')) {
+        isDraggingRef.current = false;
+        setIsDragging(false);
+        setPullDistance(0);
+        setPullStatus('idle');
+        return;
+      }
 
       const currentY = e.touches[0].clientY;
       const currentX = e.touches[0].clientX;
@@ -217,7 +233,7 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
       {/* Main Content with Direct Hardware-Accelerated Translation */}
       <div
         style={{
-          transform: `translate3d(0, ${pullDistance}px, 0)`,
+          transform: pullDistance > 0 ? `translate3d(0, ${pullDistance}px, 0)` : undefined,
           transition: isDragging 
             ? 'none' 
             : 'transform 0.26s cubic-bezier(0.16, 1, 0.3, 1)',
