@@ -5,9 +5,9 @@
 | Phase | Description | Status | Acceptance Gate |
 | :--- | :--- | :--- | :--- |
 | **Phase 0** | Comprehensive Documentation Suite | **Completed** | All 13 docs + Master Prompt reviewed |
-| **Phase 1** | React, TypeScript & PWA Foundation Scaffold | **In Progress** | Zero TS errors, PWA manifest, SW cache, Pull-to-refresh |
-| **Phase 2** | Domain Foundation & Accounting Engine | Pending | 100% pass on accounting invariant unit tests |
-| **Phase 3** | Firestore Repositories & Security Rules | Pending | Rules emulator test pass, persistent cache verified |
+| **Phase 1** | React, TypeScript & PWA Foundation Scaffold | **Completed** | Zero TS errors, PWA manifest, SW cache, Pull-to-refresh |
+| **Phase 2** | Domain Foundation & Accounting Engine | **Completed** | 100% pass on accounting invariant unit tests (20/20) |
+| **Phase 3** | Firestore Repositories & Security Rules | **Next Up** | Rules emulator test pass, persistent cache verified |
 | **Phase 4** | Core Features (Projects, Contacts, Accounts, Ledger) | Pending | Multi-project isolation & partial payment UI verified |
 | **Phase 5** | Dashboard, Search, Budgets, Reports & CSV Export | Pending | Reconciled charts, normalized search, CSV download |
 | **Phase 6** | Offline Hardening, iOS PWA & Vercel Release | Pending | iPhone Safari & installed PWA verification |
@@ -35,31 +35,32 @@
 - [x] Create root `MASTER_AGENT_PROMPT.md`
 
 ### Phase 1: React / TypeScript / Vite / PWA Foundation
-- [ ] Initialize Vite + React + TypeScript configuration.
-- [ ] Configure `tsconfig.json` with strict mode enabled.
-- [ ] Setup Tailwind CSS and mobile-first CSS design tokens.
-- [ ] Implement mobile app shell (`MobileAppLayout`) with safe-area support.
-- [ ] Implement responsive bottom navigation bar and accessible top bar.
-- [ ] Configure `manifest.webmanifest` and static PWA icons.
-- [ ] Register Service Worker with offline caching fallback.
-- [ ] Build custom gesture-driven Pull-to-Refresh with accessible alternative button.
-- [ ] Setup `.env.example` with typed Firebase environment boundary.
-- [ ] Setup Firestore multi-tab persistent cache initialization module.
-- [ ] Setup Vitest testing environment and verify test runner.
+- [x] Initialize Vite + React + TypeScript configuration.
+- [x] Configure `tsconfig.json` with strict mode enabled.
+- [x] Setup Tailwind CSS and mobile-first CSS design tokens.
+- [x] Configure `manifest.webmanifest` and static PWA icons.
+- [x] Setup `.env.example` and local `.env` with Firebase credentials.
+- [x] Initial empty project deployed live on Vercel (`https://expense-ledger-nu.vercel.app`).
+- [x] Implement mobile app shell (`MobileAppLayout`) with safe-area support.
+- [x] Implement responsive bottom navigation bar and accessible top bar.
+- [x] Register Service Worker with offline caching fallback.
+- [x] Build custom gesture-driven Pull-to-Refresh with accessible alternative button.
+- [x] Setup Firestore multi-tab persistent cache initialization module.
+- [x] Setup Vitest testing environment and verify test runner.
 
 ### Phase 2: Domain Foundation & Accounting Engine
-- [ ] Implement `Money` value object (integer minor units, formatting, arithmetic).
-- [ ] Implement Domain Entities (`Transaction`, `Obligation`, `Payment`, `Allocation`, `Project`, `Contact`, `Account`).
-- [ ] Implement `AllocationEngine` (1-to-many, many-to-1, unallocated advances).
-- [ ] Implement `BalanceEngine` (deterministic balance derivation from ledger events).
-- [ ] Implement Use Cases (`RecordExpense`, `RecordIncome`, `CreatePurchaseObligation`, `RecordOutgoingPayment`, `AllocatePayment`, `CreateTransfer`, `VoidTransaction`).
-- [ ] Author comprehensive Vitest test suite for accounting invariants.
+- [x] Implement `Money` value object (integer minor units, formatting, arithmetic).
+- [x] Implement Domain Entities (`Transaction`, `Obligation`, `Payment`, `Allocation`, `Project`, `Contact`, `Account`).
+- [x] Implement `AllocationEngine` (1-to-many, many-to-1, unallocated advances).
+- [x] Implement `BalanceEngine` (deterministic balance derivation from ledger events).
+- [x] Implement Use Cases (`RecordExpense`, `RecordIncome`, `CreatePurchaseObligation`, `RecordOutgoingPayment`, `AllocatePayment`, `CreateTransfer`, `VoidTransaction`).
+- [x] Author comprehensive Vitest test suite for accounting invariants (20/20 passed).
 
 ### Phase 3: Firestore Repositories & Security Rules
+- [x] Author and publish `firestore.rules` enforcing user-scoping (`users/{uid}`).
 - [ ] Define typed Repository Interfaces in `src/data/repositories/interfaces/`.
 - [ ] Implement Firestore concrete repositories in `src/data/repositories/firestore/`.
 - [ ] Implement client-side idempotency keys and retry handling.
-- [ ] Author `firestore.rules` enforcing user-scoping (`users/{uid}`).
 - [ ] Setup Firebase emulator test suite for security rules.
 
 ### Phase 4: Core Features Implementation

@@ -43,65 +43,9 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Scoped user collections
-    match /users/{userId} {
+    // Only the authenticated owner can read and write their own data
+    match /users/{userId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
-
-      // Project collection
-      match /projects/{projectId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Contact collection
-      match /contacts/{contactId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Accounts collection
-      match /accounts/{accountId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Categories collection
-      match /categories/{categoryId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Standard Transactions collection
-      match /transactions/{transactionId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Obligations collection
-      match /obligations/{obligationId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Payments collection
-      match /payments/{paymentId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Allocations collection
-      match /allocations/{allocationId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Budgets collection
-      match /budgets/{budgetId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // User Settings collection
-      match /settings/{settingId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Audit Events collection (Append-only)
-      match /auditEvents/{auditId} {
-        allow read, create: if request.auth != null && request.auth.uid == userId;
-        allow update, delete: if false; // Immutable audit log
-      }
     }
   }
 }
