@@ -22,6 +22,14 @@ html, body {
   touch-action: manipulation;
 }
 
+/* Light mode main canvas background: distinct, warm, premium ledger paper (clearly not white) */
+html:not(.dark),
+body:not(.dark),
+html:not(.dark) #root,
+html:not(.dark) .bg-background-light {
+  background-color: #E2DDD5 !important;
+}
+
 /* Prevent horizontal scrollbars globally */
 ::-webkit-scrollbar:horizontal {
   height: 0px !important;
@@ -98,15 +106,13 @@ body.modal-open .scroll-container {
   animation: dot-wave-sm 0.75s ease-in-out infinite;
 }
 
-/* Glisse Segmented Control track: crisp, visible rounded rectangle matching the main overview screen */
+/* Glisse Segmented Control track: exact same glass card color and finish as cards below */
 .lg-segmented > .lg-tab-bar-glass {
-  background-color: rgba(0, 0, 0, 0.06) !important;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
-}
-
-.dark .lg-segmented > .lg-tab-bar-glass {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background-color: var(--lg-glass) !important;
+  border: 1px solid var(--lg-edge) !important;
+  -webkit-backdrop-filter: blur(var(--lg-blur, 3px)) var(--lg-filter, saturate(1.5)) !important;
+  backdrop-filter: blur(var(--lg-blur, 3px)) var(--lg-filter, saturate(1.5)) !important;
+  box-shadow: inset 0 0 0 0.5px var(--lg-edge), 0 1px 3px var(--lg-drop) !important;
 }
 
 /* Glisse-native select dropdowns that eliminate iOS WebKit white boxes while matching Glisse inputs */

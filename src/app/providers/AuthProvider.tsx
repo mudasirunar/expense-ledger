@@ -226,7 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const meta = document.getElementById('theme-color-meta');
       if (meta) {
         const isDark = document.documentElement.classList.contains('dark');
-        meta.setAttribute('content', isDark ? '#0B0F19' : '#F8FAFC');
+        meta.setAttribute('content', isDark ? '#0B0F19' : '#E2DDD5');
       }
     }
 

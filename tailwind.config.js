@@ -10,7 +10,7 @@ export default {
       colors: {
         background: {
           DEFAULT: '#0B0F19',
-          light: '#F8FAFC',
+          light: '#E2DDD5',
         },
         surface: {
           DEFAULT: '#111827',
