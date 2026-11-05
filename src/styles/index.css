@@ -1,3 +1,5 @@
+@import 'glisse/styles.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -33,4 +35,19 @@ html, body {
 /* Disable pull-to-refresh native bounce on body to prevent conflict with custom gesture */
 body {
   overscroll-behavior-y: none;
+}
+
+/* Apple Liquid Glass Accents */
+.glass-surface {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.dark .glass-surface {
+  background: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }

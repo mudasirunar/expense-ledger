@@ -21,18 +21,18 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({
   children
 }) => {
   return (
-    <div className="flex flex-col h-screen w-full bg-background text-slate-100 overflow-hidden font-sans">
-      {/* Top App Bar */}
+    <div className="flex flex-col h-screen w-full bg-background-light dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
+      {/* Glisse Liquid Glass Top App Bar */}
       <TopHeader title={title} subtitle={subtitle} />
 
       {/* Main View with Dedicated Pull-To-Refresh */}
       <PullToRefresh>
-        <main className="max-w-md mx-auto w-full px-4 pt-4 pb-24">
+        <main className="max-w-md mx-auto w-full px-4 pt-4 pb-28">
           {children}
         </main>
       </PullToRefresh>
 
-      {/* Fixed Bottom Navigation */}
+      {/* Glisse Floating Liquid Glass Bottom Navigation */}
       <BottomNavigation
         currentTab={currentTab}
         onTabChange={onTabChange}
@@ -41,4 +41,3 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({
     </div>
   );
 };
-

@@ -1,24 +1,54 @@
-# UI/UX Specification & Mobile Design System
+# UI/UX Specification & Apple Liquid Glass (Glisse) Design System
 
-## 1. Visual Design System & Tokens
+## 1. Visual Design System & Apple Liquid Glass (Glisse)
 
-The interface is engineered with a clean, high-density, financial-grade aesthetic prioritizing legibility, clear visual hierarchy, and fast thumb-reachability on mobile devices.
+The interface strictly adopts Apple's **Liquid Glass** aesthetic via the **Glisse** component framework (`glisse` library by Kelvin Zhang), combined with Tailwind CSS tokens. The application must look, behave, and feel like an official native iOS 18 / visionOS application.
 
-### 1.1 Color Palette & Semantic Tokens
-* **Background Primary:** `#0B0F19` (Dark Theme) / `#F8FAFC` (Light Theme)
-* **Surface Card:** `#111827` (Dark) / `#FFFFFF` (Light)
-* **Surface Elevated:** `#1F2937` (Dark) / `#F1F5F9` (Light)
-* **Border Subdued:** `#374151` (Dark) / `#E2E8F0` (Light)
-* **Primary Accent (Indigo/Blue):** `#3B82F6` (Interactive buttons, active tabs, focus states)
-* **Financial Inflow / Credit (Emerald):** `#10B981` (Income, cash receipts, positive cash flow)
-* **Financial Outflow / Debit (Rose):** `#F43F5E` (Expenses, contractor payments, obligations)
-* **Pending / Warning (Amber):** `#F59E0B` (Unallocated advances, partial payments, budget alerts)
-* **Text High Contrast:** `#F9FAFB` (Dark) / `#0F172A` (Light)
-* **Text Muted:** `#9CA3AF` (Dark) / `#64748B` (Light)
+### 1.1 Apple Liquid Glass (Glisse) Core UI Standards
+* **Glisse Everywhere:** All primary interactive controls and surfaces must utilize Glisse components or Glisse liquid glass styling:
+  * **Bottom Navigation Bar:** Floating translucent glass dock hovering over scrollable content with real-time backdrop blur.
+  * **Top App Bar:** Liquid frosted glass header with dynamic optical refraction as content scrolls underneath.
+  * **Interactive Controls:** Glisse buttons, switches, sliders, segmented controls, and dropdowns.
+  * **Data Cards:** Translucent glass container cards with specular border highlights and inner glow.
+  * **Forms & Text Inputs:** Glass-backed input fields with high-contrast text and subtle refractive focus rings.
+  * **Modals & Drawers:** Frosted bottom sheets with layered background blur.
 
-### 1.2 Typography
-* **Font Family:** `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`
-* **Numbers / Currency:** Tabular figures (`font-variant-numeric: tabular-nums;`) to guarantee aligned decimal and digit columns.
+### 1.2 Color Palette & Semantic Tokens
+* **Dark Obsidian Glass Mode:**
+  * Background: `#0B0F19` with subtle ambient radial gradients.
+  * Glass Surface: `rgba(17, 24, 39, 0.75)` with `backdrop-blur-xl`.
+  * Glass Border: `rgba(255, 255, 255, 0.08)` with subtle 1px specular edge.
+  * Text: `#F9FAFB` (high contrast), `#9CA3AF` (muted).
+* **Light Crystal Glass Mode:**
+  * Background: `#F8FAFC`.
+  * Glass Surface: `rgba(255, 255, 255, 0.8)` with `backdrop-blur-xl`.
+  * Glass Border: `rgba(0, 0, 0, 0.06)` with subtle specular highlight.
+  * Text: `#0F172A` (high contrast), `#64748B` (muted).
+* **Financial Semantic Accents:**
+  * Inflows / Credits: `#10B981` (Emerald)
+  * Outflows / Debits: `#F43F5E` (Rose)
+  * Warnings / Advances: `#F59E0B` (Amber)
+  * System / Actions: `#3B82F6` (Electric Blue)
+
+### 1.3 Zero-Flicker Persistent Theme Architecture (FOIT Prevention)
+To prevent the jarring "Flash of Dark Mode" or "Flash of Light Mode" when a user reloads the app:
+1. **Persistent Storage:** Active theme (`'light' | 'dark' | 'system'`) is persisted in `localStorage` under key `expense_ledger_theme`.
+2. **Synchronous Head Script:** A blocking inline script in `<head>` of `index.html` executes **before React mounts and before DOM paints**:
+   ```javascript
+   (function() {
+     try {
+       const saved = localStorage.getItem('expense_ledger_theme');
+       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+       const isDark = saved === 'dark' || (!saved && prefersDark);
+       if (isDark) {
+         document.documentElement.classList.add('dark');
+       } else {
+         document.documentElement.classList.remove('dark');
+       }
+     } catch (e) {}
+   })();
+   ```
+3. **No Flashing Guarantee:** By evaluating theme state synchronously before first paint, the browser renders the exact user-selected theme with zero flicker on page refresh or launch.
 
 ---
 

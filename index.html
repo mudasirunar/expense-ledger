@@ -4,15 +4,38 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#0B0F19" />
+    <meta id="theme-color-meta" name="theme-color" content="#0B0F19" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="ExpenseLedger" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Expense Ledger & Multi-Project Accounting</title>
+
+    <!-- Synchronous Anti-Flicker Theme Script: sets both class and data-theme for Glisse -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('expense_ledger_theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = saved === 'dark' || (!saved && prefersDark);
+          var html = document.documentElement;
+          if (isDark) {
+            html.classList.add('dark');
+            html.setAttribute('data-theme', 'dark');
+            var meta = document.getElementById('theme-color-meta');
+            if (meta) meta.setAttribute('content', '#0B0F19');
+          } else {
+            html.classList.remove('dark');
+            html.setAttribute('data-theme', 'light');
+            var meta = document.getElementById('theme-color-meta');
+            if (meta) meta.setAttribute('content', '#F8FAFC');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-background text-slate-100 antialiased selection:bg-blue-600 selection:text-white">
+  <body class="bg-background-light dark:bg-background text-slate-900 dark:text-slate-100 antialiased selection:bg-blue-600 selection:text-white transition-colors duration-200">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

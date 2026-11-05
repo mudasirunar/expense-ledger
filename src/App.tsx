@@ -1,90 +1,150 @@
 import React, { useState } from 'react';
 import { SyncProvider } from './app/providers/SyncProvider';
+import { ThemeProvider } from './app/providers/ThemeProvider';
 import { MobileAppLayout } from './app/layouts/MobileAppLayout';
 import { NavTab } from '@/components/layout/BottomNavigation';
 import { ShieldCheck, Plus, Building2, Users, Wallet, ArrowRightLeft } from 'lucide-react';
+import { Glass, SegmentedControl, Button } from 'glisse';
 
-const DashboardPlaceholder: React.FC = () => (
-  <div className="space-y-4">
-    <div className="bg-gradient-to-br from-surface to-surface-elevated p-4 rounded-2xl border border-border shadow-md">
-      <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Net Cash Position</span>
-      <div className="flex items-baseline gap-2 mt-1">
-        <span className="text-2xl font-black text-white tabular-nums tracking-tight">PKR 0.00</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-border/70 text-xs">
-        <div>
-          <span className="text-slate-400">Total Inflow</span>
-          <p className="font-bold text-emerald-400 mt-0.5">PKR 0.00</p>
-        </div>
-        <div>
-          <span className="text-slate-400">Total Outflow</span>
-          <p className="font-bold text-rose-400 mt-0.5">PKR 0.00</p>
-        </div>
-      </div>
-    </div>
+const DashboardPlaceholder: React.FC = () => {
+  const [timeFilter, setTimeFilter] = useState<string>('month');
 
-    <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-start gap-2.5 text-xs text-blue-300">
-      <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-      <div>
-        <p className="font-semibold text-white">Phase 1 Foundation Active</p>
-        <p className="mt-0.5 text-slate-300">Pull-to-refresh, bottom navigation, and safe-area mobile app shell are ready.</p>
+  return (
+    <div className="space-y-4">
+      {/* Glisse Official Segmented Control - sized to 105px per tab for perfect label fit & thumb alignment */}
+      <div className="flex justify-center w-full">
+        <SegmentedControl
+          items={[
+            { value: 'today', label: 'Today' },
+            { value: 'month', label: 'This Month' },
+            { value: 'all', label: 'All Time' },
+          ]}
+          value={timeFilter}
+          onValueChange={(val) => {
+            if (val) setTimeFilter(val);
+          }}
+          style={{ '--lg-tab-width': '105px' } as React.CSSProperties}
+        />
       </div>
+
+      {/* Glisse Official Glass Card */}
+      <Glass className="p-5 rounded-2xl space-y-4">
+        <div>
+          <span className="text-[11px] font-bold tracking-wider text-[var(--lg-muted)] uppercase">
+            Net Cash Position
+          </span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-3xl font-black text-[var(--lg-foreground)] tabular-nums tracking-tight">
+              PKR 0.00
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 pt-3 border-t border-[var(--lg-separator)] text-xs">
+          <div>
+            <span className="text-[var(--lg-muted)] font-medium">Total Inflow</span>
+            <p className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm mt-0.5 tabular-nums">
+              PKR 0.00
+            </p>
+          </div>
+          <div>
+            <span className="text-[var(--lg-muted)] font-medium">Total Outflow</span>
+            <p className="font-extrabold text-rose-600 dark:text-rose-400 text-sm mt-0.5 tabular-nums">
+              PKR 0.00
+            </p>
+          </div>
+        </div>
+      </Glass>
+
+      {/* Glisse Official Status Notice */}
+      <Glass className="p-4 rounded-2xl flex items-start gap-3 text-xs">
+        <ShieldCheck className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="font-bold text-[var(--lg-foreground)] text-sm">Apple Liquid Glass Active</p>
+          <p className="mt-1 text-[var(--lg-muted)] leading-relaxed font-normal">
+            Official Glisse components with native Light & Dark theme adaptability and zero flicker.
+          </p>
+        </div>
+      </Glass>
     </div>
-  </div>
-);
+  );
+};
 
 const ProjectsPlaceholder: React.FC = () => (
-  <div className="space-y-3">
+  <div className="space-y-4">
     <div className="flex items-center justify-between">
-      <h2 className="text-sm font-bold text-white uppercase tracking-wider">Projects (0)</h2>
-      <button className="flex items-center gap-1 bg-blue-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg">
-        <Plus className="w-3.5 h-3.5" />
-        <span>Add Project</span>
-      </button>
+      <h2 className="text-xs font-bold text-[var(--lg-muted)] uppercase tracking-wider">
+        Projects (0)
+      </h2>
+      <Button
+        variant="filled"
+        tint="#2563EB"
+        icon={<Plus className="w-3.5 h-3.5" />}
+        onClick={() => console.log('Add Project')}
+      >
+        New Project
+      </Button>
     </div>
-    <div className="bg-surface p-6 rounded-xl border border-border text-center space-y-2">
-      <Building2 className="w-8 h-8 text-slate-500 mx-auto" />
-      <p className="text-sm font-medium text-white">No projects created yet</p>
-      <p className="text-xs text-slate-400">Projects will appear here with independent ledgers and budgets.</p>
-    </div>
+    <Glass className="p-8 text-center space-y-2.5 rounded-2xl">
+      <Building2 className="w-10 h-10 text-[var(--lg-muted)] mx-auto opacity-70" />
+      <p className="text-sm font-bold text-[var(--lg-foreground)]">No projects created yet</p>
+      <p className="text-xs text-[var(--lg-muted)] max-w-xs mx-auto leading-relaxed">
+        Projects will appear here with independent ledgers, material inventories, and budgets.
+      </p>
+    </Glass>
   </div>
 );
 
 const ContactsPlaceholder: React.FC = () => (
-  <div className="space-y-3">
+  <div className="space-y-4">
     <div className="flex items-center justify-between">
-      <h2 className="text-sm font-bold text-white uppercase tracking-wider">Contacts (0)</h2>
-      <button className="flex items-center gap-1 bg-blue-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg">
-        <Plus className="w-3.5 h-3.5" />
-        <span>Add Contact</span>
-      </button>
+      <h2 className="text-xs font-bold text-[var(--lg-muted)] uppercase tracking-wider">
+        Contacts (0)
+      </h2>
+      <Button
+        variant="filled"
+        tint="#2563EB"
+        icon={<Plus className="w-3.5 h-3.5" />}
+        onClick={() => console.log('Add Contact')}
+      >
+        New Contact
+      </Button>
     </div>
-    <div className="bg-surface p-6 rounded-xl border border-border text-center space-y-2">
-      <Users className="w-8 h-8 text-slate-500 mx-auto" />
-      <p className="text-sm font-medium text-white">No contacts created yet</p>
-      <p className="text-xs text-slate-400">Suppliers, contractors, and clients will be listed here.</p>
-    </div>
+    <Glass className="p-8 text-center space-y-2.5 rounded-2xl">
+      <Users className="w-10 h-10 text-[var(--lg-muted)] mx-auto opacity-70" />
+      <p className="text-sm font-bold text-[var(--lg-foreground)]">No contacts created yet</p>
+      <p className="text-xs text-[var(--lg-muted)] max-w-xs mx-auto leading-relaxed">
+        Subcontractors, suppliers, and clients will be listed here with payment histories.
+      </p>
+    </Glass>
   </div>
 );
 
 const AccountsPlaceholder: React.FC = () => (
-  <div className="space-y-3">
+  <div className="space-y-4">
     <div className="flex items-center justify-between">
-      <h2 className="text-sm font-bold text-white uppercase tracking-wider">Accounts (0)</h2>
-      <button className="flex items-center gap-1 bg-surface-elevated text-slate-200 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-border">
-        <ArrowRightLeft className="w-3.5 h-3.5 text-blue-400" />
-        <span>Transfer</span>
-      </button>
+      <h2 className="text-xs font-bold text-[var(--lg-muted)] uppercase tracking-wider">
+        Accounts (0)
+      </h2>
+      <Button
+        variant="glass"
+        icon={<ArrowRightLeft className="w-3.5 h-3.5 text-blue-500" />}
+        onClick={() => console.log('Transfer')}
+      >
+        Transfer
+      </Button>
     </div>
-    <div className="bg-surface p-6 rounded-xl border border-border text-center space-y-2">
-      <Wallet className="w-8 h-8 text-slate-500 mx-auto" />
-      <p className="text-sm font-medium text-white">No accounts configured yet</p>
-      <p className="text-xs text-slate-400">Cash drawers, bank accounts, and mobile wallets will appear here.</p>
-    </div>
+    <Glass className="p-8 text-center space-y-2.5 rounded-2xl">
+      <Wallet className="w-10 h-10 text-[var(--lg-muted)] mx-auto opacity-70" />
+      <p className="text-sm font-bold text-[var(--lg-foreground)]">No accounts configured yet</p>
+      <p className="text-xs text-[var(--lg-muted)] max-w-xs mx-auto leading-relaxed">
+        Cash drawers, bank accounts, and mobile wallets will appear here.
+      </p>
+    </Glass>
   </div>
 );
 
-export const App: React.FC = () => {
+export const AppContent: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
 
   const getHeaderMeta = () => {
@@ -105,20 +165,28 @@ export const App: React.FC = () => {
   const { title, subtitle } = getHeaderMeta();
 
   return (
-    <SyncProvider>
-      <MobileAppLayout
-        currentTab={currentTab}
-        onTabChange={setCurrentTab}
-        onQuickAdd={() => console.log('Quick Add triggered')}
-        title={title}
-        subtitle={subtitle}
-      >
-        {currentTab === 'dashboard' && <DashboardPlaceholder />}
-        {currentTab === 'projects' && <ProjectsPlaceholder />}
-        {currentTab === 'contacts' && <ContactsPlaceholder />}
-        {currentTab === 'accounts' && <AccountsPlaceholder />}
-      </MobileAppLayout>
-    </SyncProvider>
+    <MobileAppLayout
+      currentTab={currentTab}
+      onTabChange={setCurrentTab}
+      onQuickAdd={() => console.log('Quick Add triggered')}
+      title={title}
+      subtitle={subtitle}
+    >
+      {currentTab === 'dashboard' && <DashboardPlaceholder />}
+      {currentTab === 'projects' && <ProjectsPlaceholder />}
+      {currentTab === 'contacts' && <ContactsPlaceholder />}
+      {currentTab === 'accounts' && <AccountsPlaceholder />}
+    </MobileAppLayout>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <ThemeProvider>
+      <SyncProvider>
+        <AppContent />
+      </SyncProvider>
+    </ThemeProvider>
   );
 };
 
