@@ -347,22 +347,22 @@ export const AppContent: React.FC = () => {
     return <ProfileView onBack={handleBackFromProfile} />;
   }
 
-  const getHeaderMeta = () => {
+  const getHeaderTitle = () => {
     switch (currentTab) {
       case 'dashboard':
-        return { title: 'Financial Overview', subtitle: 'Executive cash & project balance' };
+        return 'Financial Overview';
       case 'projects':
-        return { title: 'Project Portfolios', subtitle: 'Multi-Project Ledgers' };
+        return 'Project Portfolios';
       case 'contacts':
-        return { title: 'Contacts & Parties', subtitle: 'Suppliers, Contractors, Clients' };
+        return 'Contacts & Parties';
       case 'accounts':
-        return { title: 'Liquidity & Accounts', subtitle: 'Cash, Banks & Mobile Wallets' };
+        return 'Liquidity & Accounts';
       default:
-        return { title: 'Expense Ledger', subtitle: 'Accounting PWA' };
+        return 'Expense Ledger';
     }
   };
 
-  const { title, subtitle } = getHeaderMeta();
+  const title = getHeaderTitle();
 
   return (
     <>
@@ -372,7 +372,6 @@ export const AppContent: React.FC = () => {
         onQuickAdd={() => setIsQuickAddOpen(true)}
         onOpenProfile={handleOpenProfile}
         title={title}
-        subtitle={subtitle}
       >
         {currentTab === 'dashboard' && <DashboardOverview onRefreshKey={refreshKey} />}
         {currentTab === 'projects' && <ProjectsView />}

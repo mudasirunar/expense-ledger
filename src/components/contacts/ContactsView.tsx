@@ -254,10 +254,7 @@ export const ContactsView: React.FC = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/20 dark:bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
             <div className="w-full max-w-md p-4 sm:p-6 rounded-3xl space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--lg-separator)]">
-              <div>
-                <h3 className="text-base font-extrabold text-[var(--lg-foreground)]">Register Contact</h3>
-                <p className="text-[11px] text-[var(--lg-muted)]">Add a contractor, worker, or supplier</p>
-              </div>
+              <h3 className="text-base font-extrabold text-[var(--lg-foreground)]">Register Contact</h3>
               <button
                 onClick={() => {
                   setIsCreateOpen(false);

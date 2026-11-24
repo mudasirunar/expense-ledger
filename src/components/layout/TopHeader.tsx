@@ -1,8 +1,7 @@
 import React from 'react';
-import { RotateCw, WifiOff, Cloud, RefreshCw, User } from 'lucide-react';
+import { User } from 'lucide-react';
 import { useSync } from '@/app/providers/SyncProvider';
 import { useAuth } from '@/app/providers/AuthProvider';
-import { Button } from 'glisse';
 
 interface TopHeaderProps {
   title: string;
@@ -11,66 +10,49 @@ interface TopHeaderProps {
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({ title, subtitle, onOpenProfile }) => {
-  const { isOnline, pendingWritesCount, triggerManualRefresh, isRefreshing } = useSync();
+  const { isOnline, pendingWritesCount } = useSync();
   const { user } = useAuth();
+
+  const statusRingClass = !isOnline
+    ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-[#E2DDD5] dark:ring-offset-background shadow-[0_0_12px_rgba(239,68,68,0.55)] dark:shadow-[0_0_14px_rgba(239,68,68,0.7)]'
+    : pendingWritesCount > 0
+      ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-[#E2DDD5] dark:ring-offset-background shadow-[0_0_12px_rgba(251,191,36,0.6)] dark:shadow-[0_0_14px_rgba(251,191,36,0.75)] animate-pulse'
+      : 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-[#E2DDD5] dark:ring-offset-background shadow-[0_0_12px_rgba(16,185,129,0.5)] dark:shadow-[0_0_14px_rgba(16,185,129,0.65)]';
+
+  const statusLabel = !isOnline
+    ? 'Offline'
+    : pendingWritesCount > 0
+      ? `Syncing (${pendingWritesCount})`
+      : 'Synced';
 
   return (
     <header className="z-30 w-full bg-[#E2DDD5] dark:bg-background border-none px-4 py-2.5 flex items-center justify-between select-none transition-colors duration-200">
       <div>
-        <h1 className="text-base font-extrabold text-[var(--lg-foreground)] tracking-tight">{title}</h1>
+        <h1 className="text-xl font-extrabold text-[var(--lg-foreground)] tracking-tight">{title}</h1>
         {subtitle && <p className="text-xs text-[var(--lg-muted)] font-medium">{subtitle}</p>}
       </div>
 
-      <div className="flex items-center gap-2">
-        {/* Network & Sync Status Pill */}
-        {!isOnline ? (
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-            <WifiOff className="w-3 h-3" />
-            <span>Offline</span>
-          </div>
-        ) : pendingWritesCount > 0 ? (
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-            <Cloud className="w-3 h-3 animate-pulse" />
-            <span>Syncing ({pendingWritesCount})</span>
-          </div>
+      {/* Profile Avatar with Colored Sync Status Ring */}
+      <button
+        onClick={onOpenProfile}
+        aria-label={`Open profile (${statusLabel})`}
+        title={statusLabel}
+        className={`relative w-9 h-9 rounded-full flex items-center justify-center bg-[var(--lg-glass)] backdrop-blur-md hover:scale-105 active:scale-95 transition-all overflow-hidden ${statusRingClass}`}
+      >
+        {user?.photoURL ? (
+          <img
+            src={user.photoURL}
+            alt={user.displayName || 'Profile'}
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
         ) : (
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            <span>Synced</span>
-          </div>
+          <User className="w-4 h-4 text-[var(--lg-foreground)]" />
         )}
-
-        {/* Glisse Apple Liquid Glass Refresh Button */}
-        <Button
-          variant="glass"
-          aria-label="Refresh financial records"
-          onClick={() => triggerManualRefresh()}
-          disabled={isRefreshing}
-          icon={isRefreshing ? <RotateCw className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" /> : <RefreshCw className="w-4 h-4" />}
-          className="!p-2 !rounded-full !w-9 !h-9"
-        />
-
-        {/* Profile Screen Button */}
-        <button
-          onClick={onOpenProfile}
-          aria-label="Open profile"
-          className="relative w-9 h-9 rounded-full flex items-center justify-center border border-[var(--lg-surface-edge)] bg-[var(--lg-glass)] backdrop-blur-md hover:scale-105 active:scale-95 transition-all shadow-sm overflow-hidden"
-        >
-          {user?.photoURL ? (
-            <img
-              src={user.photoURL}
-              alt={user.displayName || 'Profile'}
-              referrerPolicy="no-referrer"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
-            />
-          ) : (
-            <User className="w-4 h-4 text-[var(--lg-foreground)]" />
-          )}
-        </button>
-      </div>
+      </button>
     </header>
   );
 };
