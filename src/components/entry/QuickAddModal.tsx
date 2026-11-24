@@ -13,6 +13,7 @@ import { useAuth } from '@/app/providers/AuthProvider';
 import { Button, Input, SegmentedControl } from 'glisse';
 import { X, AlertCircle } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
+import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
 
 const projectRepo = new FirestoreProjectRepository();
 const contactRepo = new FirestoreContactRepository();
@@ -36,6 +37,9 @@ let cachedQuickAddData: {
   contacts: Contact[];
   accounts: Account[];
 } | null = null;
+registerMemoryCacheClearer(() => {
+  cachedQuickAddData = null;
+});
 
 export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { user } = useAuth();

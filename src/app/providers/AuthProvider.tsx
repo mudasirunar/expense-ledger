@@ -8,6 +8,7 @@ import {
   browserLocalPersistence
 } from 'firebase/auth';
 import { auth, googleAuthProvider, isFirebaseConfigured } from '@/data/firebase/firebaseConfig';
+import { clearAllMemoryCaches } from '@/data/sync/dataWipeService';
 import { Button } from 'glisse';
 
 const TwoToneSpinner: React.FC<{ className?: string }> = ({ className = "w-5 h-5 md:w-5.5 md:h-5.5" }) => (
@@ -278,6 +279,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       await signOut(auth);
+      clearAllMemoryCaches();
       try {
         sessionStorage.removeItem('ledger_last_tab');
       } catch {

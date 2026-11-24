@@ -14,11 +14,15 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
+import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
 
 const projectRepo = new FirestoreProjectRepository();
 
 // In-memory cache for instant (0ms) project switching
 let cachedProjects: { userId: string; data: Project[] } | null = null;
+registerMemoryCacheClearer(() => {
+  cachedProjects = null;
+});
 
 export const ProjectsView: React.FC = () => {
   const { user } = useAuth();

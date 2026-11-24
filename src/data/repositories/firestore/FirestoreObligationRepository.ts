@@ -1,18 +1,19 @@
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  updateDoc, 
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
   query,
   where,
   orderBy,
-  QueryConstraint
+  QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '@/data/firebase/firestoreClient';
 import { Obligation } from '@/domain/entities';
 import { IObligationRepository, ObligationFilter } from '../interfaces';
+import { isRecordActive, sanitizeUpdatePayload } from '@/data/sync/dataWipeService';
 
 export class FirestoreObligationRepository implements IObligationRepository {
   private getUserObligationsCollection(userId: string) {
@@ -23,7 +24,8 @@ export class FirestoreObligationRepository implements IObligationRepository {
     const docRef = doc(db, 'users', userId, 'obligations', id);
     const snap = await getDoc(docRef);
     if (!snap.exists()) return null;
-    return snap.data() as Obligation;
+    const data = snap.data() as Obligation;
+    return isRecordActive(userId, data) ? data : null;
   }
 
   async list(userId: string, filter?: ObligationFilter): Promise<Obligation[]> {
@@ -43,19 +45,21 @@ export class FirestoreObligationRepository implements IObligationRepository {
 
     const q = query(this.getUserObligationsCollection(userId), ...constraints);
     const snap = await getDocs(q);
-    return snap.docs.map((d) => d.data() as Obligation);
+    return snap.docs
+      .map((d) => d.data() as Obligation)
+      .filter((item) => isRecordActive(userId, item));
   }
 
   async create(userId: string, obligation: Obligation): Promise<void> {
     const docRef = doc(db, 'users', userId, 'obligations', obligation.id);
-    await setDoc(docRef, { ...obligation });
+    await setDoc(docRef, { ...obligation, isDeleted: false });
   }
 
   async update(userId: string, id: string, partial: Partial<Obligation>): Promise<void> {
     const docRef = doc(db, 'users', userId, 'obligations', id);
     await updateDoc(docRef, {
-      ...partial,
-      updatedAt: new Date().toISOString()
+      ...sanitizeUpdatePayload(partial),
+      updatedAt: new Date().toISOString(),
     });
   }
 
@@ -63,8 +67,7 @@ export class FirestoreObligationRepository implements IObligationRepository {
     const docRef = doc(db, 'users', userId, 'obligations', id);
     await updateDoc(docRef, {
       status: 'voided',
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
   }
 }
-

@@ -1,19 +1,20 @@
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  updateDoc, 
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
   query,
   where,
   orderBy,
   onSnapshot,
-  QueryConstraint
+  QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '@/data/firebase/firestoreClient';
 import { Transaction } from '@/domain/entities';
 import { ITransactionRepository, TransactionFilter } from '../interfaces';
+import { isRecordActive } from '@/data/sync/dataWipeService';
 
 export class FirestoreTransactionRepository implements ITransactionRepository {
   private getUserTransactionsCollection(userId: string) {
@@ -24,7 +25,8 @@ export class FirestoreTransactionRepository implements ITransactionRepository {
     const docRef = doc(db, 'users', userId, 'transactions', id);
     const snap = await getDoc(docRef);
     if (!snap.exists()) return null;
-    return snap.data() as Transaction;
+    const data = snap.data() as Transaction;
+    return isRecordActive(userId, data) ? data : null;
   }
 
   async list(userId: string, filter?: TransactionFilter): Promise<Transaction[]> {
@@ -51,15 +53,25 @@ export class FirestoreTransactionRepository implements ITransactionRepository {
 
     const q = query(this.getUserTransactionsCollection(userId), ...constraints);
     const snap = await getDocs(q);
-    return snap.docs.map((d) => d.data() as Transaction);
+    return snap.docs
+      .map((d) => d.data() as Transaction)
+      .filter((item) => isRecordActive(userId, item));
   }
 
-  subscribe(userId: string, onUpdate: (transactions: Transaction[]) => void, onError?: (error: Error) => void): () => void {
+  subscribe(
+    userId: string,
+    onUpdate: (transactions: Transaction[]) => void,
+    onError?: (error: Error) => void
+  ): () => void {
     const q = query(this.getUserTransactionsCollection(userId), orderBy('date', 'desc'));
     return onSnapshot(
       q,
       (snap) => {
-        onUpdate(snap.docs.map((d) => d.data() as Transaction));
+        onUpdate(
+          snap.docs
+            .map((d) => d.data() as Transaction)
+            .filter((item) => isRecordActive(userId, item))
+        );
       },
       (err) => {
         if (onError) onError(err);
@@ -69,15 +81,14 @@ export class FirestoreTransactionRepository implements ITransactionRepository {
 
   async create(userId: string, transaction: Transaction): Promise<void> {
     const docRef = doc(db, 'users', userId, 'transactions', transaction.id);
-    await setDoc(docRef, { ...transaction });
+    await setDoc(docRef, { ...transaction, isDeleted: false });
   }
 
   async void(userId: string, id: string): Promise<void> {
     const docRef = doc(db, 'users', userId, 'transactions', id);
     await updateDoc(docRef, {
       status: 'voided',
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
   }
 }
-

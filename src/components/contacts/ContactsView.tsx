@@ -14,12 +14,16 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
+import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
 
 const contactRepo = new FirestoreContactRepository();
 const paymentRepo = new FirestorePaymentRepository();
 
 // In-memory cache for instant (0ms) contact switching
 let cachedContacts: { userId: string; data: Contact[] } | null = null;
+registerMemoryCacheClearer(() => {
+  cachedContacts = null;
+});
 
 const ALL_ROLES: ContactRole[] = ['contractor', 'supplier', 'worker', 'customer', 'client', 'other'];
 

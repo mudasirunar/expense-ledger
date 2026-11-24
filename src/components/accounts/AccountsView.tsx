@@ -16,12 +16,16 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
+import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
 
 const accountRepo = new FirestoreAccountRepository();
 const transactionRepo = new FirestoreTransactionRepository();
 
 // In-memory cache for instant (0ms) account switching
 let cachedAccounts: { userId: string; data: Account[] } | null = null;
+registerMemoryCacheClearer(() => {
+  cachedAccounts = null;
+});
 
 export const AccountsView: React.FC = () => {
   const { user } = useAuth();

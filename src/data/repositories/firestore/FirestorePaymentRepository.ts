@@ -1,19 +1,20 @@
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
   writeBatch,
-  updateDoc, 
+  updateDoc,
   query,
   where,
   orderBy,
   limit,
-  QueryConstraint
+  QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '@/data/firebase/firestoreClient';
 import { Payment, Allocation } from '@/domain/entities';
 import { IPaymentRepository, PaymentFilter } from '../interfaces';
+import { isRecordActive } from '@/data/sync/dataWipeService';
 
 export class FirestorePaymentRepository implements IPaymentRepository {
   private getUserPaymentsCollection(userId: string) {
@@ -28,7 +29,8 @@ export class FirestorePaymentRepository implements IPaymentRepository {
     const docRef = doc(db, 'users', userId, 'payments', id);
     const snap = await getDoc(docRef);
     if (!snap.exists()) return null;
-    return snap.data() as Payment;
+    const data = snap.data() as Payment;
+    return isRecordActive(userId, data) ? data : null;
   }
 
   async list(userId: string, filter?: PaymentFilter): Promise<Payment[]> {
@@ -48,7 +50,9 @@ export class FirestorePaymentRepository implements IPaymentRepository {
 
     const q = query(this.getUserPaymentsCollection(userId), ...constraints);
     const snap = await getDocs(q);
-    return snap.docs.map((d) => d.data() as Payment);
+    return snap.docs
+      .map((d) => d.data() as Payment)
+      .filter((item) => isRecordActive(userId, item));
   }
 
   async getLatestByContact(userId: string, contactId: string): Promise<Payment | null> {
@@ -57,23 +61,25 @@ export class FirestorePaymentRepository implements IPaymentRepository {
       where('contactId', '==', contactId),
       where('status', '==', 'posted'),
       orderBy('date', 'desc'),
-      limit(1)
+      limit(10)
     );
     const snap = await getDocs(q);
-    if (snap.empty) return null;
-    return snap.docs[0].data() as Payment;
+    const active = snap.docs
+      .map((d) => d.data() as Payment)
+      .find((item) => isRecordActive(userId, item));
+    return active ?? null;
   }
 
   async create(userId: string, payment: Payment, allocations?: Allocation[]): Promise<void> {
     const batch = writeBatch(db);
 
     const paymentDocRef = doc(db, 'users', userId, 'payments', payment.id);
-    batch.set(paymentDocRef, { ...payment });
+    batch.set(paymentDocRef, { ...payment, isDeleted: false });
 
     if (allocations && allocations.length > 0) {
       for (const alloc of allocations) {
         const allocDocRef = doc(db, 'users', userId, 'allocations', alloc.id);
-        batch.set(allocDocRef, { ...alloc });
+        batch.set(allocDocRef, { ...alloc, isDeleted: false });
       }
     }
 
@@ -84,7 +90,7 @@ export class FirestorePaymentRepository implements IPaymentRepository {
     const docRef = doc(db, 'users', userId, 'payments', id);
     await updateDoc(docRef, {
       status: 'voided',
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
   }
 
@@ -94,7 +100,9 @@ export class FirestorePaymentRepository implements IPaymentRepository {
       where('paymentId', '==', paymentId)
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => d.data() as Allocation);
+    return snap.docs
+      .map((d) => d.data() as Allocation)
+      .filter((item) => isRecordActive(userId, item));
   }
 
   async listAllocationsForObligation(userId: string, obligationId: string): Promise<Allocation[]> {
@@ -103,7 +111,8 @@ export class FirestorePaymentRepository implements IPaymentRepository {
       where('obligationId', '==', obligationId)
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => d.data() as Allocation);
+    return snap.docs
+      .map((d) => d.data() as Allocation)
+      .filter((item) => isRecordActive(userId, item));
   }
 }
-

@@ -1,17 +1,18 @@
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  updateDoc, 
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
   query,
   orderBy,
-  onSnapshot
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '@/data/firebase/firestoreClient';
 import { Account } from '@/domain/entities';
 import { IAccountRepository } from '../interfaces';
+import { isRecordActive, sanitizeUpdatePayload } from '@/data/sync/dataWipeService';
 
 export class FirestoreAccountRepository implements IAccountRepository {
   private getUserAccountsCollection(userId: string) {
@@ -22,21 +23,32 @@ export class FirestoreAccountRepository implements IAccountRepository {
     const docRef = doc(db, 'users', userId, 'accounts', id);
     const snap = await getDoc(docRef);
     if (!snap.exists()) return null;
-    return snap.data() as Account;
+    const data = snap.data() as Account;
+    return isRecordActive(userId, data) ? data : null;
   }
 
   async list(userId: string): Promise<Account[]> {
     const q = query(this.getUserAccountsCollection(userId), orderBy('name', 'asc'));
     const snap = await getDocs(q);
-    return snap.docs.map((d) => d.data() as Account);
+    return snap.docs
+      .map((d) => d.data() as Account)
+      .filter((item) => isRecordActive(userId, item));
   }
 
-  subscribe(userId: string, onUpdate: (accounts: Account[]) => void, onError?: (error: Error) => void): () => void {
+  subscribe(
+    userId: string,
+    onUpdate: (accounts: Account[]) => void,
+    onError?: (error: Error) => void
+  ): () => void {
     const q = query(this.getUserAccountsCollection(userId), orderBy('name', 'asc'));
     return onSnapshot(
       q,
       (snap) => {
-        onUpdate(snap.docs.map((d) => d.data() as Account));
+        onUpdate(
+          snap.docs
+            .map((d) => d.data() as Account)
+            .filter((item) => isRecordActive(userId, item))
+        );
       },
       (err) => {
         if (onError) onError(err);
@@ -46,14 +58,14 @@ export class FirestoreAccountRepository implements IAccountRepository {
 
   async create(userId: string, account: Account): Promise<void> {
     const docRef = doc(db, 'users', userId, 'accounts', account.id);
-    await setDoc(docRef, { ...account });
+    await setDoc(docRef, { ...account, isDeleted: false });
   }
 
   async update(userId: string, id: string, partial: Partial<Account>): Promise<void> {
     const docRef = doc(db, 'users', userId, 'accounts', id);
     await updateDoc(docRef, {
-      ...partial,
-      updatedAt: new Date().toISOString()
+      ...sanitizeUpdatePayload(partial),
+      updatedAt: new Date().toISOString(),
     });
   }
 
@@ -61,8 +73,7 @@ export class FirestoreAccountRepository implements IAccountRepository {
     const docRef = doc(db, 'users', userId, 'accounts', id);
     await updateDoc(docRef, {
       currentBalanceMinor: newBalanceMinor,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
   }
 }
-

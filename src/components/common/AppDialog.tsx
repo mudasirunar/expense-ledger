@@ -1,16 +1,20 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import { Glass, Button } from 'glisse';
 
 export type AppDialogTone = 'default' | 'danger' | 'warning' | 'success';
+export type AppDialogAlign = 'left' | 'center' | 'right';
 
 export interface AppDialogProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  description?: string;
+  description?: React.ReactNode;
   icon?: React.ReactNode;
+  iconAlign?: AppDialogAlign;
+  titleAlign?: AppDialogAlign;
+  descriptionAlign?: AppDialogAlign;
   tone?: AppDialogTone;
   confirmLabel?: string;
   confirmLoadingLabel?: string;
@@ -50,12 +54,27 @@ const TONE_STYLES: Record<
   },
 };
 
+const ALIGN_SELF: Record<AppDialogAlign, string> = {
+  left: 'self-start',
+  center: 'self-center',
+  right: 'self-end',
+};
+
+const TEXT_ALIGN: Record<AppDialogAlign, string> = {
+  left: 'text-left',
+  center: 'text-center',
+  right: 'text-right',
+};
+
 export const AppDialog: React.FC<AppDialogProps> = ({
   isOpen,
   onClose,
   title,
   description,
   icon,
+  iconAlign = 'center',
+  titleAlign = 'center',
+  descriptionAlign = 'left',
   tone = 'default',
   confirmLabel = 'Confirm',
   confirmLoadingLabel,
@@ -72,6 +91,35 @@ export const AppDialog: React.FC<AppDialogProps> = ({
   const isConfirmDisabled = disableConfirm || isLoading;
   const styles = TONE_STYLES[tone];
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [visualViewportBox, setVisualViewportBox] = useState<{
+    height: number;
+    offsetTop: number;
+  } | null>(null);
+
+  // Track mobile virtual keyboard via VisualViewport API so dialog stays centered above keyboard
+  useEffect(() => {
+    if (!isOpen || typeof window === 'undefined' || !window.visualViewport) {
+      setVisualViewportBox(null);
+      return;
+    }
+
+    const vv = window.visualViewport;
+    const syncViewport = () => {
+      setVisualViewportBox({
+        height: vv.height,
+        offsetTop: vv.offsetTop,
+      });
+    };
+
+    syncViewport();
+    vv.addEventListener('resize', syncViewport);
+    vv.addEventListener('scroll', syncViewport);
+
+    return () => {
+      vv.removeEventListener('resize', syncViewport);
+      vv.removeEventListener('scroll', syncViewport);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -89,7 +137,8 @@ export const AppDialog: React.FC<AppDialogProps> = ({
 
     const preventBackgroundScroll = (e: TouchEvent | WheelEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest('[data-dialog-scrollable="true"]')) {
+      const scrollable = target?.closest('[data-dialog-scrollable="true"]') as HTMLElement | null;
+      if (scrollable && scrollable.scrollHeight > scrollable.clientHeight) {
         return;
       }
       e.preventDefault();
@@ -117,11 +166,11 @@ export const AppDialog: React.FC<AppDialogProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="app-dialog-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 touch-none overscroll-none"
+      className="fixed inset-0 z-50 touch-none overscroll-none"
     >
-      {/* Dimmed Blur Backdrop */}
+      {/* Full-Screen Dimmed Blur Backdrop */}
       <div
-        className="absolute inset-0 bg-black/45 dark:bg-black/65 backdrop-blur-sm transition-opacity touch-none"
+        className="fixed inset-0 bg-black/45 dark:bg-black/65 backdrop-blur-sm transition-opacity touch-none"
         onClick={() => {
           if (closeOnBackdrop && !isLoading) {
             onClose();
@@ -129,67 +178,83 @@ export const AppDialog: React.FC<AppDialogProps> = ({
         }}
       />
 
-      {/* Glisse Liquid Glass Dialog Card */}
-      <Glass className="relative z-10 w-full max-w-[330px] sm:max-w-sm rounded-3xl p-5 shadow-2xl border border-white/30 dark:border-white/15 bg-[#ECE8E1]/95 dark:bg-[#131926]/95">
-        <div className="flex flex-col items-center text-center">
-          {icon && (
-            <div
-              className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3.5 ${styles.iconBox}`}
+      {/* Visual-Viewport-Aware Centering Frame (lifts dialog cleanly above mobile keyboard) */}
+      <div
+        className="fixed left-0 right-0 z-10 flex items-center justify-center p-4 pointer-events-none transition-[height,top] duration-150 ease-out"
+        style={
+          visualViewportBox
+            ? {
+                top: `${visualViewportBox.offsetTop}px`,
+                height: `${visualViewportBox.height}px`,
+              }
+            : {
+                top: 0,
+                bottom: 0,
+              }
+        }
+      >
+        {/* Glisse Liquid Glass Dialog Card */}
+        <Glass className="pointer-events-auto relative w-full max-w-[330px] sm:max-w-sm max-h-full overflow-y-auto overscroll-contain rounded-3xl p-5 shadow-2xl border border-white/30 dark:border-white/15 bg-[#ECE8E1]/95 dark:bg-[#131926]/95">
+          <div className="flex flex-col w-full">
+            {icon && (
+              <div
+                className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3.5 ${ALIGN_SELF[iconAlign]} ${styles.iconBox}`}
+              >
+                {icon}
+              </div>
+            )}
+
+            <h2
+              id="app-dialog-title"
+              className={`w-full text-base font-extrabold text-[var(--lg-foreground)] tracking-tight ${TEXT_ALIGN[titleAlign]}`}
             >
-              {icon}
-            </div>
-          )}
+              {title}
+            </h2>
 
-          <h2
-            id="app-dialog-title"
-            className="text-base font-extrabold text-[var(--lg-foreground)] tracking-tight"
-          >
-            {title}
-          </h2>
+            {description && (
+              <p className={`w-full mt-2 text-xs text-[var(--lg-muted)] leading-relaxed ${TEXT_ALIGN[descriptionAlign]}`}>
+                {description}
+              </p>
+            )}
 
-          {description && (
-            <p className="mt-1.5 text-xs text-[var(--lg-muted)] leading-relaxed max-w-[260px]">
-              {description}
-            </p>
-          )}
+            {children && (
+              <div className="w-full mt-4 text-left">
+                {children}
+              </div>
+            )}
+          </div>
 
-          {children && (
-            <div data-dialog-scrollable="true" className="w-full mt-4 text-left max-h-[50dvh] overflow-y-auto overscroll-contain touch-pan-y">
-              {children}
-            </div>
-          )}
-        </div>
+          {/* Action Buttons */}
+          <div className="grid grid-cols-2 gap-2.5 mt-5">
+            <Button
+              variant="glass"
+              onClick={onClose}
+              disabled={isCancelDisabled}
+              className={`!w-full !py-2.5 !rounded-xl font-bold !text-sm flex items-center justify-center transition-all ${
+                isCancelDisabled
+                  ? '!opacity-40 !cursor-not-allowed !pointer-events-none !text-[var(--lg-muted)]'
+                  : '!text-[var(--lg-foreground)]'
+              }`}
+            >
+              {cancelLabel}
+            </Button>
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-2.5 mt-5">
-          <Button
-            variant="glass"
-            onClick={onClose}
-            disabled={isCancelDisabled}
-            className={`!w-full !py-2.5 !rounded-xl font-bold !text-sm flex items-center justify-center transition-all ${
-              isCancelDisabled
-                ? '!opacity-40 !cursor-not-allowed !pointer-events-none !text-[var(--lg-muted)]'
-                : '!text-[var(--lg-foreground)]'
-            }`}
-          >
-            {cancelLabel}
-          </Button>
-
-          <Button
-            variant="glass"
-            onClick={() => onConfirm()}
-            disabled={isConfirmDisabled}
-            className={`!w-full !py-2.5 !rounded-xl font-bold !text-sm flex items-center justify-center gap-1.5 transition-all ${
-              styles.confirmBtn
-            } ${
-              isConfirmDisabled ? '!opacity-75 !cursor-not-allowed !pointer-events-none' : ''
-            }`}
-            icon={isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
-          >
-            {isLoading && confirmLoadingLabel ? confirmLoadingLabel : confirmLabel}
-          </Button>
-        </div>
-      </Glass>
+            <Button
+              variant="glass"
+              onClick={() => onConfirm()}
+              disabled={isConfirmDisabled}
+              className={`!w-full !py-2.5 !rounded-xl font-bold !text-sm flex items-center justify-center gap-1.5 transition-all ${
+                styles.confirmBtn
+              } ${
+                isConfirmDisabled ? '!opacity-75 !cursor-not-allowed !pointer-events-none' : ''
+              }`}
+              icon={isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+            >
+              {isLoading && confirmLoadingLabel ? confirmLoadingLabel : confirmLabel}
+            </Button>
+          </div>
+        </Glass>
+      </div>
     </div>,
     document.body
   );

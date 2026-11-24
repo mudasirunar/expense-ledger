@@ -1,15 +1,170 @@
 rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// All application data is strictly user-scoped under /users/{userId}/.
+// Unauthenticated access and cross-user access are denied by default.
+//
+// Document: /users/{userId}/meta/syncState
+// Fields:
+//   - wipedAt: string (required, ISO-8601 timestamp, 1..64 chars, monotonic on update)
+//   - updatedAt: string (required, ISO-8601 timestamp, 1..64 chars)
+// Lifecycle:
+//   - Created/updated by owner on "Delete All Data" wipe.
+//   - Never deletable so offline devices reconnecting later always observe wipedAt.
+//
+// Collections: /users/{userId}/{collection}/{docId}
+// Allowed collections:
+//   ['projects', 'contacts', 'accounts', 'obligations', 'payments', 'allocations', 'transactions']
+// Common Ledger & Tombstone Fields:
+//   - id: string (optional on legacy docs, matches docId when present, 1..128 chars, immutable)
+//   - createdAt: string (optional on legacy docs, ISO-8601 timestamp, 1..64 chars, immutable)
+//   - updatedAt: string (optional, ISO-8601 timestamp, 1..64 chars)
+//   - isDeleted: bool (optional; once true, document is permanently tombstoned against updates)
+//   - deletedAt: string | null (required non-empty string 1..64 chars whenever isDeleted == true)
+// Lifecycle:
+//   - Delete-Wins Tombstone Invariant: updates are denied once resource.data.isDeleted == true.
+//   - Hard delete is allowed for the owner so batched "Delete All Data" cloud wipes can purge
+//     pre-wipe documents from Firestore.
+//
+// ===============================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Deny access to any un-scoped root documents
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the authenticated user owns the userId path segment
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Validate that the document contains only the allowed fields
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate that all required fields exist on the incoming document
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validate bounded non-empty timestamp string (ISO-8601)
+    function isValidTimestampString(val) {
+      return val is string && val.size() > 0 && val.size() <= 64;
+    }
+
+    // Check if the collection name is one of the 7 allowed ledger collections
+    function isUserDataCollection(col) {
+      return col in [
+        'projects',
+        'contacts',
+        'accounts',
+        'obligations',
+        'payments',
+        'allocations',
+        'transactions'
+      ];
+    }
+
+    // ===============================================================
+    // Domain Validators (Used in BOTH create and update)
+    // ===============================================================
+
+    // Validate /users/{userId}/meta/syncState payload
+    function isValidSyncState(data) {
+      return hasOnlyAllowedFields(['wipedAt', 'updatedAt']) &&
+             hasRequiredFields(['wipedAt', 'updatedAt']) &&
+             isValidTimestampString(data.wipedAt) &&
+             isValidTimestampString(data.updatedAt);
+    }
+
+    // Enforce monotonic wipe marker: wipedAt can never move backwards
+    function isMonotonicWipe(existingData, newData) {
+      return !('wipedAt' in existingData) ||
+             newData.wipedAt >= existingData.wipedAt;
+    }
+
+    // Check whether an existing document has already been soft-deleted (tombstoned)
+    function isTombstoned(data) {
+      return data.get('isDeleted', false) == true;
+    }
+
+    // Validate soft-delete tombstone fields on create and update:
+    // - isDeleted, if present, must be a bool
+    // - deletedAt, if present and non-null, must be a bounded string
+    // - if isDeleted == true, deletedAt MUST be a valid string
+    function isValidTombstoneState(data) {
+      return (!('isDeleted' in data) || data.isDeleted is bool) &&
+             (!('deletedAt' in data) || data.deletedAt == null || isValidTimestampString(data.deletedAt)) &&
+             (data.get('isDeleted', false) != true ||
+               (('deletedAt' in data) && isValidTimestampString(data.deletedAt)));
+    }
+
+    // Validate common ledger document structure and bounds on create and update
+    function isValidLedgerDocument(data, docId) {
+      return data.keys().size() <= 30 &&
+             (!('id' in data) || (data.id is string && data.id == docId && data.id.size() > 0 && data.id.size() <= 128)) &&
+             (!('createdAt' in data) || isValidTimestampString(data.createdAt)) &&
+             (!('updatedAt' in data) || isValidTimestampString(data.updatedAt)) &&
+             isValidTombstoneState(data);
+    }
+
+    // Ensure immutable identity and creation fields cannot be altered on update
+    function areImmutableLedgerFieldsUnchanged() {
+      return (!('id' in resource.data) || request.resource.data.id == resource.data.id) &&
+             (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Default deny everything at root
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Only the authenticated owner can read and write their own data
-    match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Wipe-marker metadata document: /users/{userId}/meta/syncState
+    match /users/{userId}/meta/syncState {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+                       isValidSyncState(request.resource.data);
+      allow update: if isOwner(userId) &&
+                       isValidSyncState(request.resource.data) &&
+                       isMonotonicWipe(resource.data, request.resource.data);
+      // Never allow deleting the wipe marker so offline devices reconnecting later always see it
+      allow delete: if false;
+    }
+
+    // User-scoped ledger data collections with Delete-Wins Tombstone Invariant
+    match /users/{userId}/{collection}/{docId} {
+      allow read: if isOwner(userId) && isUserDataCollection(collection);
+
+      allow create: if isOwner(userId) &&
+                       isUserDataCollection(collection) &&
+                       isValidLedgerDocument(request.resource.data, docId);
+
+      // Delete-Wins Tombstone Invariant:
+      // Once resource.data.isDeleted == true, deny all updates so no offline edit
+      // can resurrect isDeleted back to false or mutate a tombstoned record.
+      allow update: if isOwner(userId) &&
+                       isUserDataCollection(collection) &&
+                       !isTombstoned(resource.data) &&
+                       isValidLedgerDocument(request.resource.data, docId) &&
+                       areImmutableLedgerFieldsUnchanged();
+
+      // Owner-only hard delete required for batched "Delete All Data" cloud wipes
+      allow delete: if isOwner(userId) && isUserDataCollection(collection);
     }
   }
 }

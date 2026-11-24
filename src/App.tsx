@@ -14,6 +14,7 @@ import { Account, Transaction } from '@/domain/entities';
 import { Money } from '@/domain/accounting/money';
 import { ShieldCheck, TrendingUp, TrendingDown } from 'lucide-react';
 import { Glass, SegmentedControl } from 'glisse';
+import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
 
 const accountRepo = new FirestoreAccountRepository();
 const transactionRepo = new FirestoreTransactionRepository();
@@ -37,6 +38,9 @@ let cachedDashboard: {
   accounts: Account[];
   transactions: Transaction[];
 } | null = null;
+registerMemoryCacheClearer(() => {
+  cachedDashboard = null;
+});
 
 const DashboardOverview: React.FC<{ onRefreshKey: number }> = ({ onRefreshKey }) => {
   const { user } = useAuth();

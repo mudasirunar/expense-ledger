@@ -3,9 +3,14 @@
  * Independent of React, DOM, or Firestore SDK.
  */
 
+export interface SoftDeletable {
+  readonly isDeleted?: boolean;
+  readonly deletedAt?: string | null;
+}
+
 export type ProjectStatus = 'planned' | 'active' | 'on_hold' | 'completed' | 'archived';
 
-export interface Project {
+export interface Project extends SoftDeletable {
   readonly id: string;
   readonly name: string;
   readonly code?: string;
@@ -23,7 +28,7 @@ export interface Project {
 
 export type ContactRole = 'contractor' | 'worker' | 'supplier' | 'customer' | 'client' | 'other';
 
-export interface Contact {
+export interface Contact extends SoftDeletable {
   readonly id: string;
   readonly name: string;
   readonly companyName?: string;
@@ -38,7 +43,7 @@ export interface Contact {
 
 export type AccountType = 'cash' | 'bank' | 'mobile_wallet' | 'other';
 
-export interface Account {
+export interface Account extends SoftDeletable {
   readonly id: string;
   readonly name: string;
   readonly type: AccountType;
@@ -62,7 +67,7 @@ export interface MaterialDetails {
   readonly unitPriceMinor: number;
 }
 
-export interface Obligation {
+export interface Obligation extends SoftDeletable {
   readonly id: string;
   readonly type: ObligationType;
   readonly direction: ObligationDirection;
@@ -84,7 +89,7 @@ export type PaymentDirection = 'outgoing' | 'incoming';
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'cheque' | 'mobile_wallet' | 'other';
 export type PaymentStatus = 'posted' | 'voided';
 
-export interface Payment {
+export interface Payment extends SoftDeletable {
   readonly id: string;
   readonly idempotencyKey: string;
   readonly direction: PaymentDirection;
@@ -104,7 +109,7 @@ export interface Payment {
   readonly updatedAt: string;
 }
 
-export interface Allocation {
+export interface Allocation extends SoftDeletable {
   readonly id: string;
   readonly paymentId: string;
   readonly obligationId: string;
@@ -117,7 +122,7 @@ export type TransactionType = 'expense' | 'income' | 'transfer' | 'refund';
 export type TransactionScope = 'personal' | 'project';
 export type TransactionStatus = 'posted' | 'voided';
 
-export interface Transaction {
+export interface Transaction extends SoftDeletable {
   readonly id: string;
   readonly idempotencyKey: string;
   readonly type: TransactionType;
