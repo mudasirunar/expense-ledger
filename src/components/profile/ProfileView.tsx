@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ChevronLeft, LogOut, Trash2, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, LogOut, Trash2 } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useTheme } from '@/app/providers/ThemeProvider';
+import { useSnackbar } from '@/app/providers/SnackbarProvider';
 import { Glass, Button } from 'glisse';
 import { ThemePreviewPicker } from './ThemePreviewPicker';
 import { AppDialog } from '@/components/common/AppDialog';
@@ -14,16 +15,13 @@ interface ProfileViewProps {
 export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
   const { user, signOutUser } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { showSnackbar } = useSnackbar();
   const [isSignOutDialogOpen, setIsSignOutDialogOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeletingData, setIsDeletingData] = useState(false);
-  const [deleteFeedback, setDeleteFeedback] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
 
   const handleConfirmSignOut = async () => {
     setIsSigningOut(true);
@@ -38,22 +36,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
   const handleConfirmDeleteAllData = async () => {
     if (!user?.uid || deleteConfirmText.trim().toUpperCase() !== 'DELETE') return;
     setIsDeletingData(true);
-    setDeleteFeedback(null);
     try {
-      const result = await wipeAllUserData(user.uid);
+      await wipeAllUserData(user.uid);
       setIsDeleteDialogOpen(false);
       setDeleteConfirmText('');
-      setDeleteFeedback({
-        type: 'success',
-        message: result.cloudSynced
-          ? 'All local and cloud data has been permanently deleted.'
-          : 'Local data cleared. Cloud data will be permanently wiped once back online.',
+      showSnackbar({
+        message: 'Your data has been deleted.',
+        tone: 'success',
       });
     } catch (error) {
       console.error('[Profile] Data wipe failed:', error);
-      setDeleteFeedback({
-        type: 'error',
-        message: 'Could not delete data. Please check your connection and try again.',
+      showSnackbar({
+        message: 'Could not delete data. Please try again.',
+        tone: 'error',
       });
     } finally {
       setIsDeletingData(false);
@@ -146,26 +141,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
               Data
             </h3>
 
-            {deleteFeedback && (
-              <div
-                className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 border ${
-                  deleteFeedback.type === 'success'
-                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
-                    : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20'
-                }`}
-              >
-                {deleteFeedback.type === 'success' && (
-                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                )}
-                <span>{deleteFeedback.message}</span>
-              </div>
-            )}
-
             <Button
               variant="glass"
               onClick={() => {
                 setDeleteConfirmText('');
-                setDeleteFeedback(null);
                 setIsDeleteDialogOpen(true);
               }}
               className="!w-full !py-3 !rounded-xl font-bold !text-[var(--lg-foreground)] flex items-center justify-center gap-2 transition-all"

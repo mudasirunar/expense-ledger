@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { SyncProvider } from './app/providers/SyncProvider';
 import { ThemeProvider } from './app/providers/ThemeProvider';
 import { AuthProvider, useAuth } from './app/providers/AuthProvider';
+import { SnackbarProvider } from './app/providers/SnackbarProvider';
 import { MobileAppLayout } from './app/layouts/MobileAppLayout';
 import { NavTab } from '@/components/layout/BottomNavigation';
 import { ProjectsView } from '@/components/projects/ProjectsView';
@@ -391,11 +392,13 @@ export const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <SyncProvider>
-          <AppContent />
-        </SyncProvider>
-      </AuthProvider>
+      <SnackbarProvider>
+        <AuthProvider>
+          <SyncProvider>
+            <AppContent />
+          </SyncProvider>
+        </AuthProvider>
+      </SnackbarProvider>
     </ThemeProvider>
   );
 };
