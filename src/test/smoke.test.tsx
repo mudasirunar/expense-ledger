@@ -17,7 +17,7 @@ describe('Phase 1 Foundation Smoke Tests', () => {
     expect(screen.getByText('Financial Overview')).toBeInTheDocument();
     expect(screen.getAllByText('Overview').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Projects').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Contacts').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Profile').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Accounts').length).toBeGreaterThan(0);
   });
 });

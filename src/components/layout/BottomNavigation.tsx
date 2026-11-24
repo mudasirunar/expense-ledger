@@ -1,8 +1,10 @@
 import React from 'react';
-import { LayoutDashboard, Building2, Plus, Users, Wallet } from 'lucide-react';
+import { LayoutDashboard, Building2, Plus, User, Wallet } from 'lucide-react';
 import { TabBar, Button } from 'glisse';
+import { useSync } from '@/app/providers/SyncProvider';
+import { useAuth } from '@/app/providers/AuthProvider';
 
-export type NavTab = 'dashboard' | 'projects' | 'contacts' | 'accounts';
+export type NavTab = 'dashboard' | 'projects' | 'accounts' | 'profile';
 
 interface BottomNavigationProps {
   currentTab: NavTab;
@@ -15,6 +17,19 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   onTabChange,
   onQuickAdd,
 }) => {
+  const { isOnline, pendingWritesCount } = useSync();
+  const { user } = useAuth();
+  const statusLabel = !isOnline
+    ? 'Offline'
+    : pendingWritesCount > 0
+      ? `Syncing (${pendingWritesCount})`
+      : 'Synced';
+  const statusRingClass = !isOnline
+    ? 'ring-2 ring-red-500 shadow-[0_0_8px_rgba(239,68,68,0.7)]'
+    : pendingWritesCount > 0
+      ? 'ring-2 ring-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.75)] animate-pulse'
+      : 'ring-2 ring-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.65)]';
+
   const tabItems = [
     {
       value: 'dashboard',
@@ -27,14 +42,34 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
       icon: <Building2 className="w-[21px] h-[21px]" />,
     },
     {
-      value: 'contacts',
-      label: 'Contacts',
-      icon: <Users className="w-[21px] h-[21px]" />,
-    },
-    {
       value: 'accounts',
       label: 'Accounts',
       icon: <Wallet className="w-[21px] h-[21px]" />,
+    },
+    {
+      value: 'profile',
+      label: 'Profile',
+      icon: (
+        <span
+          title={statusLabel}
+          aria-label={`Profile (${statusLabel})`}
+          className={`relative inline-flex items-center justify-center w-[26px] h-[26px] rounded-full overflow-hidden bg-[var(--lg-glass)] ${statusRingClass}`}
+        >
+          {user?.photoURL ? (
+            <img
+              src={user.photoURL}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <User className="w-[15px] h-[15px]" />
+          )}
+        </span>
+      ),
     },
   ];
 
@@ -54,9 +89,12 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           onValueChange={(val) => {
             if (val) onTabChange(val as NavTab);
           }}
-          className="flex-1"
+          className="flex-none"
           style={{
-            '--lg-tab-width': 'clamp(66px, calc((100vw - 110px) / 4), 84px)',
+            // Tabs fill the dock exactly: dock width (screen - 2rem padding, max 28rem) minus the 54px +
+            // button, the 10px gap and the bar's 2x4px inset, split over 4 tabs. Any slack would leave
+            // the tabs left-aligned inside the glass pill.
+            '--lg-tab-width': 'calc((min(100vw - 2rem, 28rem) - 54px - 10px - 8px) / 4)',
             '--lg-tab-height': '54px',
           } as React.CSSProperties}
         />

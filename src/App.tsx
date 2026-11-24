@@ -245,23 +245,26 @@ const DashboardOverview: React.FC<{ onRefreshKey: number }> = ({ onRefreshKey })
           </p>
         </div>
       </Glass>
+
+      {/* Contacts live here now (Contacts tab moved into Overview; Profile took its place in the bottom bar) */}
+      <div className="pt-2">
+        <ContactsView />
+      </div>
     </div>
   );
 };
 
-const VALID_TABS: NavTab[] = ['dashboard', 'projects', 'contacts', 'accounts'];
+const VALID_TABS: NavTab[] = ['dashboard', 'projects', 'accounts', 'profile'];
 const LAST_TAB_STORAGE_KEY = 'ledger_last_tab';
 
-function parseHashRoute(): { screen: 'main' | 'profile'; tab: NavTab | null } {
-  if (typeof window === 'undefined') return { screen: 'main', tab: null };
+// Every bottom-bar screen has its own hash route so reloads and back/forward stay on the same screen.
+// Legacy '#/contacts' now lives on the Overview screen.
+function parseHashRoute(): NavTab | null {
+  if (typeof window === 'undefined') return null;
   const raw = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-  if (raw === 'profile') {
-    return { screen: 'profile', tab: null };
-  }
-  if (VALID_TABS.includes(raw as NavTab)) {
-    return { screen: 'main', tab: raw as NavTab };
-  }
-  return { screen: 'main', tab: null };
+  if (raw === 'contacts') return 'dashboard';
+  if (VALID_TABS.includes(raw as NavTab)) return raw as NavTab;
+  return null;
 }
 
 function getSavedTab(): NavTab {
@@ -274,34 +277,40 @@ function getSavedTab(): NavTab {
   return 'dashboard';
 }
 
+function persistTab(tab: NavTab) {
+  try {
+    sessionStorage.setItem(LAST_TAB_STORAGE_KEY, tab);
+  } catch {
+    // ignore
+  }
+}
+
+const TAB_TITLES: Record<NavTab, string> = {
+  dashboard: 'Financial Overview',
+  projects: 'Project Portfolios',
+  accounts: 'Liquidity & Accounts',
+  profile: 'Profile',
+};
+
 export const AppContent: React.FC = () => {
-  const [currentTab, setCurrentTab] = useState<NavTab>(() => {
-    const route = parseHashRoute();
-    return route.tab ?? getSavedTab();
-  });
-  const [isProfileScreen, setIsProfileScreen] = useState<boolean>(() => {
-    return parseHashRoute().screen === 'profile';
-  });
+  const [currentTab, setCurrentTab] = useState<NavTab>(() => parseHashRoute() ?? getSavedTab());
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
-  // Sync with browser hash navigation (supports refresh & native back/forward)
+  // Make sure the URL always reflects the current screen (also normalizes empty / legacy hashes)
+  useEffect(() => {
+    const targetHash = `#/${currentTab}`;
+    if (window.location.hash !== targetHash) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${targetHash}`);
+    }
+    persistTab(currentTab);
+  }, [currentTab]);
+
+  // Sync with browser hash navigation (supports native back/forward)
   useEffect(() => {
     const handleHashChange = () => {
-      const route = parseHashRoute();
-      if (route.screen === 'profile') {
-        setIsProfileScreen(true);
-      } else {
-        setIsProfileScreen(false);
-        if (route.tab) {
-          setCurrentTab(route.tab);
-          try {
-            sessionStorage.setItem(LAST_TAB_STORAGE_KEY, route.tab);
-          } catch {
-            // ignore
-          }
-        }
-      }
+      const tab = parseHashRoute();
+      if (tab) setCurrentTab(tab);
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -310,59 +319,12 @@ export const AppContent: React.FC = () => {
 
   const handleTabChange = (tab: NavTab) => {
     setCurrentTab(tab);
-    setIsProfileScreen(false);
-    try {
-      sessionStorage.setItem(LAST_TAB_STORAGE_KEY, tab);
-    } catch {
-      // ignore
-    }
-    const targetHash = tab === 'dashboard' ? '#/dashboard' : `#/${tab}`;
+    persistTab(tab);
+    const targetHash = `#/${tab}`;
     if (window.location.hash !== targetHash) {
       window.location.hash = targetHash;
     }
   };
-
-  const handleOpenProfile = () => {
-    try {
-      sessionStorage.setItem(LAST_TAB_STORAGE_KEY, currentTab);
-    } catch {
-      // ignore
-    }
-    setIsProfileScreen(true);
-    if (window.location.hash !== '#/profile') {
-      window.location.hash = '#/profile';
-    }
-  };
-
-  const handleBackFromProfile = () => {
-    const returnTab = currentTab || getSavedTab();
-    setIsProfileScreen(false);
-    const targetHash = `#/${returnTab}`;
-    if (window.location.hash !== targetHash) {
-      window.location.hash = targetHash;
-    }
-  };
-
-  if (isProfileScreen) {
-    return <ProfileView onBack={handleBackFromProfile} />;
-  }
-
-  const getHeaderTitle = () => {
-    switch (currentTab) {
-      case 'dashboard':
-        return 'Financial Overview';
-      case 'projects':
-        return 'Project Portfolios';
-      case 'contacts':
-        return 'Contacts & Parties';
-      case 'accounts':
-        return 'Liquidity & Accounts';
-      default:
-        return 'Expense Ledger';
-    }
-  };
-
-  const title = getHeaderTitle();
 
   return (
     <>
@@ -370,13 +332,12 @@ export const AppContent: React.FC = () => {
         currentTab={currentTab}
         onTabChange={handleTabChange}
         onQuickAdd={() => setIsQuickAddOpen(true)}
-        onOpenProfile={handleOpenProfile}
-        title={title}
+        title={TAB_TITLES[currentTab]}
       >
         {currentTab === 'dashboard' && <DashboardOverview onRefreshKey={refreshKey} />}
         {currentTab === 'projects' && <ProjectsView />}
-        {currentTab === 'contacts' && <ContactsView />}
         {currentTab === 'accounts' && <AccountsView />}
+        {currentTab === 'profile' && <ProfileView />}
       </MobileAppLayout>
 
       <QuickAddModal

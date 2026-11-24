@@ -153,7 +153,7 @@ export const ContactsView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 pb-20">
+    <div className="space-y-4">
       {/* Action Header */}
       <div className="flex items-center justify-between">
         <div>

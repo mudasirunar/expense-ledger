@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import {
-  ChevronLeft,
   LogOut,
   Trash2,
   Download,
@@ -36,11 +35,7 @@ const COLLECTION_LABELS: Record<UserCollectionName, string> = {
   allocations: 'Allocations',
 };
 
-interface ProfileViewProps {
-  onBack: () => void;
-}
-
-export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
+export const ProfileView: React.FC = () => {
   const { user, signOutUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const { showSnackbar } = useSnackbar();
@@ -212,45 +207,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
     }
   };
 
-  const isPWA = typeof window !== 'undefined' && (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    Boolean((navigator as unknown as { standalone?: boolean }).standalone)
-  );
-
   const displayName = user?.displayName || 'Authorized User';
   const email = user?.email || 'No email attached';
   const photoURL = user?.photoURL;
   const initial = (displayName[0] || 'U').toUpperCase();
 
   return (
-    <div className="flex flex-col app-screen w-full bg-[#E2DDD5] dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
-      {/* Status Bar Ceiling Spacer: Matches main layout for PWA safe area */}
-      <div
-        className="w-full flex-shrink-0 bg-transparent select-none pointer-events-none pwa-top-spacer"
-        style={{
-          height: isPWA
-            ? 'calc(env(safe-area-inset-top, 0px) + 12px)'
-            : 'env(safe-area-inset-top, 0px)'
-        }}
-      />
-
-      {/* Dedicated Minimal Profile Top Bar */}
-      <header className="z-30 w-full bg-[#E2DDD5] dark:bg-background border-none px-4 py-2.5 flex items-center gap-3 select-none transition-colors duration-200">
-        <Button
-          variant="glass"
-          aria-label="Go back"
-          onClick={onBack}
-          icon={<ChevronLeft className="w-4 h-4" />}
-          className="!p-2 !rounded-full !w-9 !h-9 flex-shrink-0"
-        />
-        <h1 className="text-xl font-extrabold text-[var(--lg-foreground)] tracking-tight">
-          Profile
-        </h1>
-      </header>
-
-      {/* Standalone Scrollable Flat Body */}
-      <div className="flex-1 overflow-y-auto scroll-container overscroll-y-contain">
-        <main className="max-w-md sm:max-w-lg mx-auto w-full px-4 pt-4 pb-10 space-y-6">
+    <>
+        <main className="w-full space-y-6 pb-4">
           {/* Profile Identity (Flat on screen, no card) */}
           <section className="flex items-center gap-4">
             <div
@@ -391,7 +355,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
             </p>
           </section>
         </main>
-      </div>
 
       {/* Reusable Glisse Confirmation Dialog for Sign Out */}
       <AppDialog
@@ -553,6 +516,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
           className="!max-w-none"
         />
       </AppDialog>
-    </div>
+    </>
   );
 };

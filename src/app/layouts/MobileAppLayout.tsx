@@ -7,7 +7,6 @@ interface MobileAppLayoutProps {
   currentTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   onQuickAdd: () => void;
-  onOpenProfile?: () => void;
   title: string;
   subtitle?: string;
   children: React.ReactNode;
@@ -17,7 +16,6 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({
   currentTab,
   onTabChange,
   onQuickAdd,
-  onOpenProfile,
   title,
   subtitle,
   children
@@ -29,25 +27,19 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({
 
   return (
     <div className="flex flex-col app-screen w-full bg-[#E2DDD5] dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
-      {/* Status Bar Ceiling Spacer: Shifted slightly down for PWA to avoid iOS status bar scrim */}
-      <div 
-        className="w-full flex-shrink-0 bg-transparent select-none pointer-events-none pwa-top-spacer" 
-        style={{
-          height: isPWA 
-            ? 'calc(env(safe-area-inset-top, 0px) + 12px)' 
-            : 'env(safe-area-inset-top, 0px)'
-        }}
-      />
-
-      {/* Clean Top Header */}
-      <TopHeader 
-        title={title} 
-        subtitle={subtitle} 
-        onOpenProfile={onOpenProfile} 
-      />
-
-      {/* Main View with Dedicated Pull-To-Refresh */}
+      {/* Fully scrollable screen: status-bar spacer + top bar scroll up together with the content */}
       <PullToRefresh>
+        <div
+          className="w-full select-none pointer-events-none pwa-top-spacer"
+          style={{
+            height: isPWA
+              ? 'calc(env(safe-area-inset-top, 0px) + 12px)'
+              : 'env(safe-area-inset-top, 0px)'
+          }}
+        />
+
+        <TopHeader title={title} subtitle={subtitle} />
+
         <main className="max-w-md mx-auto w-full px-4 pt-3 pb-24">
           {children}
         </main>
