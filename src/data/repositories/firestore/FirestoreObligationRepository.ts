@@ -13,7 +13,11 @@ import {
 import { db } from '@/data/firebase/firestoreClient';
 import { Obligation } from '@/domain/entities';
 import { IObligationRepository, ObligationFilter } from '../interfaces';
-import { isRecordActive, sanitizeUpdatePayload } from '@/data/sync/dataWipeService';
+import {
+  isRecordActive,
+  sanitizeUpdatePayload,
+  stripUndefinedFields,
+} from '@/data/sync/dataWipeService';
 
 export class FirestoreObligationRepository implements IObligationRepository {
   private getUserObligationsCollection(userId: string) {
@@ -52,7 +56,7 @@ export class FirestoreObligationRepository implements IObligationRepository {
 
   async create(userId: string, obligation: Obligation): Promise<void> {
     const docRef = doc(db, 'users', userId, 'obligations', obligation.id);
-    await setDoc(docRef, { ...obligation, isDeleted: false });
+    await setDoc(docRef, stripUndefinedFields({ ...obligation, isDeleted: false }));
   }
 
   async update(userId: string, id: string, partial: Partial<Obligation>): Promise<void> {

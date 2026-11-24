@@ -16,7 +16,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
-import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
+import { registerMemoryCacheClearer, awaitLocalCommit } from '@/data/sync/dataWipeService';
+import { generateEntityId } from '@/domain/utils/id';
 
 const accountRepo = new FirestoreAccountRepository();
 const transactionRepo = new FirestoreTransactionRepository();
@@ -92,6 +93,7 @@ export const AccountsView: React.FC = () => {
 
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     if (!name.trim()) {
       setFormError('Account name is required.');
       return;
@@ -105,7 +107,7 @@ export const AccountsView: React.FC = () => {
 
     try {
       const newAccount: Account = {
-        id: `acc-${Date.now()}`,
+        id: generateEntityId('acc'),
         name: name.trim(),
         type,
         institution: institution.trim() || undefined,
@@ -117,8 +119,10 @@ export const AccountsView: React.FC = () => {
         updatedAt: new Date().toISOString(),
       };
 
-      await accountRepo.create(userId, newAccount);
-      setAccounts((prev) => [...prev, newAccount]);
+      await awaitLocalCommit(accountRepo.create(userId, newAccount));
+      setAccounts((prev) =>
+        prev.some((a) => a.id === newAccount.id) ? prev : [...prev, newAccount]
+      );
       setIsCreateOpen(false);
       resetAccountForm();
     } catch (err: unknown) {
@@ -168,15 +172,17 @@ export const AccountsView: React.FC = () => {
         notes: transferNotes.trim() || undefined,
       });
 
-      // 2. Persist transaction
-      await transactionRepo.create(userId, transferTx);
-
-      // 3. Atomically update balances
+      // 2. Persist transaction & update balances offline-first
       const newSourceBalance = sourceAcc.currentBalanceMinor - amountMinor;
       const newTargetBalance = targetAcc.currentBalanceMinor + amountMinor;
 
-      await accountRepo.updateBalance(userId, sourceAccountId, newSourceBalance);
-      await accountRepo.updateBalance(userId, targetAccountId, newTargetBalance);
+      await awaitLocalCommit(
+        Promise.all([
+          transactionRepo.create(userId, transferTx),
+          accountRepo.updateBalance(userId, sourceAccountId, newSourceBalance),
+          accountRepo.updateBalance(userId, targetAccountId, newTargetBalance),
+        ])
+      );
 
       // 4. Update local state
       setAccounts((prev) =>

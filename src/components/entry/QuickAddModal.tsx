@@ -10,10 +10,11 @@ import {
 } from '@/data/repositories/firestore';
 import { DomainUseCases } from '@/domain/usecases';
 import { useAuth } from '@/app/providers/AuthProvider';
+import { useSnackbar } from '@/app/providers/SnackbarProvider';
 import { Button, Input, SegmentedControl } from 'glisse';
 import { X, AlertCircle } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
-import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
+import { registerMemoryCacheClearer, awaitLocalCommit } from '@/data/sync/dataWipeService';
 
 const projectRepo = new FirestoreProjectRepository();
 const contactRepo = new FirestoreContactRepository();
@@ -28,7 +29,7 @@ interface QuickAddModalProps {
   onSuccess?: () => void;
 }
 
-type EntryType = 'expense' | 'obligation' | 'payment';
+type EntryType = 'expense' | 'income' | 'obligation' | 'payment';
 
 // In-memory cache for instant modal dropdown population (< 1ms)
 let cachedQuickAddData: {
@@ -43,6 +44,7 @@ registerMemoryCacheClearer(() => {
 
 export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { user } = useAuth();
+  const { showSnackbar } = useSnackbar();
   const userId = user?.uid || 'guest-user';
 
   const [entryType, setEntryType] = useState<EntryType>('expense');
@@ -99,6 +101,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     const amountVal = parseFloat(amountStr) || 0;
     const amountMinor = Math.round(amountVal * 100);
 
@@ -111,6 +114,11 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
     setError(null);
 
     try {
+      const combinedNotes =
+        title.trim() && notes.trim()
+          ? `${title.trim()} — ${notes.trim()}`
+          : title.trim() || notes.trim() || undefined;
+
       if (entryType === 'expense') {
         if (!accountId) throw new Error('Please select an account for payment.');
         const tx = DomainUseCases.recordExpense({
@@ -119,16 +127,33 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
           accountId,
           amountMinor,
           date,
-          notes: notes.trim() || undefined,
+          notes: combinedNotes,
         });
 
-        await transactionRepo.create(userId, tx);
-
-        // Update account balance
         const acc = accounts.find((a) => a.id === accountId);
+        const writes: Promise<unknown>[] = [transactionRepo.create(userId, tx)];
         if (acc) {
-          await accountRepo.updateBalance(userId, accountId, acc.currentBalanceMinor - amountMinor);
+          writes.push(accountRepo.updateBalance(userId, accountId, acc.currentBalanceMinor - amountMinor));
         }
+        await awaitLocalCommit(Promise.all(writes));
+      } else if (entryType === 'income') {
+        if (!accountId) throw new Error('Please select an account to deposit into.');
+        const tx = DomainUseCases.recordIncome({
+          scope: projectId ? 'project' : 'personal',
+          projectId: projectId || undefined,
+          accountId,
+          contactId: contactId || undefined,
+          amountMinor,
+          date,
+          notes: combinedNotes,
+        });
+
+        const acc = accounts.find((a) => a.id === accountId);
+        const writes: Promise<unknown>[] = [transactionRepo.create(userId, tx)];
+        if (acc) {
+          writes.push(accountRepo.updateBalance(userId, accountId, acc.currentBalanceMinor + amountMinor));
+        }
+        await awaitLocalCommit(Promise.all(writes));
       } else if (entryType === 'obligation') {
         if (!title.trim() && !itemName.trim()) throw new Error('Obligation title is required.');
         const unitPriceVal = parseFloat(unitPriceStr) || 0;
@@ -152,7 +177,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
           notes: notes.trim() || undefined,
         });
 
-        await obligationRepo.create(userId, obl);
+        await awaitLocalCommit(obligationRepo.create(userId, obl));
       } else if (entryType === 'payment') {
         if (!accountId) throw new Error('Please select an account for payment.');
         if (!contactId) throw new Error('Please select a recipient contact.');
@@ -167,15 +192,23 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
           notes: notes.trim() || undefined,
         });
 
-        await paymentRepo.create(userId, pmt);
-
-        // Update account balance
         const acc = accounts.find((a) => a.id === accountId);
+        const writes: Promise<unknown>[] = [paymentRepo.create(userId, pmt)];
         if (acc) {
-          await accountRepo.updateBalance(userId, accountId, acc.currentBalanceMinor - amountMinor);
+          writes.push(accountRepo.updateBalance(userId, accountId, acc.currentBalanceMinor - amountMinor));
         }
+        await awaitLocalCommit(Promise.all(writes));
       }
 
+      setTitle('');
+      setAmountStr('');
+      setNotes('');
+      setItemName('');
+      setUnitPriceStr('');
+      showSnackbar({
+        message: entryType === 'income' ? 'Funds added to account.' : 'Entry recorded.',
+        tone: 'success',
+      });
       onSuccess?.();
       onClose();
     } catch (err: unknown) {
@@ -187,8 +220,8 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
 
   return (
     <ModalPortal isOpen={isOpen}>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/20 dark:bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
-        <div className="w-full max-w-md p-4 sm:p-6 rounded-3xl space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/20 dark:bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto overflow-x-hidden">
+        <div className="w-full max-w-md p-4 sm:p-6 rounded-3xl space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl">
           <div className="flex items-center justify-between pb-2 border-b border-[var(--lg-separator)]">
             <h3 className="text-base font-extrabold text-[var(--lg-foreground)]">Record Financial Entry</h3>
             <button
@@ -199,19 +232,20 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
             </button>
           </div>
 
-          {/* Glisse Segmented Control for entry type - exact same implementation as dashboard */}
-          <div className="flex justify-center w-full py-2">
+          {/* Glisse Segmented Control for entry type */}
+          <div className="flex justify-center w-full py-2 overflow-hidden">
             <SegmentedControl
               items={[
                 { value: 'expense', label: 'Expense' },
+                { value: 'income', label: 'Income' },
                 { value: 'obligation', label: 'Bill / PO' },
-                { value: 'payment', label: 'Disbursement' },
+                { value: 'payment', label: 'Payment' },
               ]}
               value={entryType}
               onValueChange={(val) => {
                 if (val) setEntryType(val as EntryType);
               }}
-              style={{ '--lg-tab-width': '105px' } as React.CSSProperties}
+              style={{ '--lg-tab-width': 'clamp(76px, 21vw, 94px)' } as React.CSSProperties}
             />
           </div>
 
@@ -286,7 +320,11 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
               Description / Memo *
             </label>
             <Input
-              placeholder="e.g. Fuel for generator or site lunch"
+              placeholder={
+                entryType === 'income'
+                  ? 'e.g. Client advance, salary, or cash deposit'
+                  : 'e.g. Fuel for generator or site lunch'
+              }
               value={title}
               onValueChange={setTitle}
               className="!max-w-none"
@@ -344,7 +382,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
 
             <div className={entryType !== 'obligation' ? 'block' : 'hidden'}>
               <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
-                Paid From Account *
+                {entryType === 'income' ? 'Deposit Into Account *' : 'Paid From Account *'}
               </label>
               <select
                 value={accountId}
@@ -446,7 +484,11 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
               disabled={submitting}
               className="!text-xs font-semibold"
             >
-              {submitting ? 'Recording...' : 'Record Entry'}
+              {submitting
+                ? 'Recording...'
+                : entryType === 'income'
+                  ? 'Add Funds'
+                  : 'Record Entry'}
             </Button>
           </div>
         </form>

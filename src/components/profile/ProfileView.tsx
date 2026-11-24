@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
-import { ChevronLeft, LogOut, Trash2 } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import {
+  ChevronLeft,
+  LogOut,
+  Trash2,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  Loader2,
+} from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useTheme } from '@/app/providers/ThemeProvider';
 import { useSnackbar } from '@/app/providers/SnackbarProvider';
@@ -7,6 +15,25 @@ import { Glass, Button, Input } from 'glisse';
 import { ThemePreviewPicker } from './ThemePreviewPicker';
 import { AppDialog } from '@/components/common/AppDialog';
 import { wipeAllUserData } from '@/data/sync/dataWipeService';
+import {
+  SmartRestorePlan,
+  UserCollectionName,
+  executeSmartRestore,
+  exportFullBackupJson,
+  exportLedgerCsv,
+  parseAndValidateBackup,
+  planSmartRestore,
+} from '@/data/sync/backupRestoreService';
+
+const COLLECTION_LABELS: Record<UserCollectionName, string> = {
+  projects: 'Projects',
+  accounts: 'Accounts',
+  contacts: 'Contacts',
+  transactions: 'Transactions',
+  obligations: 'Obligations',
+  payments: 'Payments',
+  allocations: 'Allocations',
+};
 
 interface ProfileViewProps {
   onBack: () => void;
@@ -16,12 +43,24 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
   const { user, signOutUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const { showSnackbar } = useSnackbar();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [isSignOutDialogOpen, setIsSignOutDialogOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeletingData, setIsDeletingData] = useState(false);
+
+  const [isExportingJson, setIsExportingJson] = useState(false);
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
+
+  const [isAnalyzingRestore, setIsAnalyzingRestore] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<{
+    plan: SmartRestorePlan;
+    filename: string;
+  } | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const handleConfirmSignOut = async () => {
     setIsSigningOut(true);
@@ -37,7 +76,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
     if (!user?.uid || deleteConfirmText.trim().toUpperCase() !== 'DELETE') return;
     setIsDeletingData(true);
     try {
-      await wipeAllUserData(user.uid);
+      // Clears local immediately and runs Firestore cloud wipe silently in the background
+      await wipeAllUserData(user.uid, { runInBackground: true });
       setIsDeleteDialogOpen(false);
       setDeleteConfirmText('');
       showSnackbar({
@@ -52,6 +92,109 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
       });
     } finally {
       setIsDeletingData(false);
+    }
+  };
+
+  const handleBackupJson = async () => {
+    if (!user?.uid || isExportingJson) return;
+    setIsExportingJson(true);
+    try {
+      const { totalRecords } = await exportFullBackupJson(user.uid);
+      showSnackbar({
+        message: totalRecords > 0 ? `Backup downloaded (${totalRecords} records).` : 'Empty backup downloaded.',
+        tone: 'success',
+      });
+    } catch (error) {
+      console.error('[Profile] Backup export failed:', error);
+      showSnackbar({
+        message: 'Could not create backup. Please try again.',
+        tone: 'error',
+      });
+    } finally {
+      setIsExportingJson(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    if (!user?.uid || isExportingCsv) return;
+    setIsExportingCsv(true);
+    try {
+      const { rowCount } = await exportLedgerCsv(user.uid);
+      showSnackbar({
+        message: rowCount > 0 ? `Exported ${rowCount} transactions to CSV.` : 'Exported empty CSV.',
+        tone: 'success',
+      });
+    } catch (error) {
+      console.error('[Profile] CSV export failed:', error);
+      showSnackbar({
+        message: 'Could not export CSV. Please try again.',
+        tone: 'error',
+      });
+    } finally {
+      setIsExportingCsv(false);
+    }
+  };
+
+  const handleRestoreFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user?.uid) return;
+
+    setIsAnalyzingRestore(true);
+    try {
+      const text = await file.text();
+      const validation = parseAndValidateBackup(text);
+      if (!validation.valid || !validation.envelope) {
+        showSnackbar({
+          message: validation.error || 'Invalid backup file.',
+          tone: 'error',
+        });
+        return;
+      }
+
+      const plan = await planSmartRestore(user.uid, validation.envelope);
+      setPendingRestore({
+        plan,
+        filename: file.name,
+      });
+    } catch (error) {
+      console.error('[Profile] Restore analysis failed:', error);
+      showSnackbar({
+        message: 'Could not read backup file.',
+        tone: 'error',
+      });
+    } finally {
+      setIsAnalyzingRestore(false);
+    }
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!user?.uid || !pendingRestore) return;
+    setIsRestoring(true);
+    try {
+      const { importedCount, updatedCount, skippedCount } = await executeSmartRestore(
+        user.uid,
+        pendingRestore.plan
+      );
+      setPendingRestore(null);
+
+      const parts: string[] = [];
+      if (importedCount > 0) parts.push(`${importedCount} imported`);
+      if (updatedCount > 0) parts.push(`${updatedCount} updated`);
+      if (skippedCount > 0) parts.push(`${skippedCount} skipped`);
+
+      showSnackbar({
+        message: parts.length > 0 ? `Restore complete: ${parts.join(', ')}.` : 'Nothing new to restore.',
+        tone: 'success',
+      });
+    } catch (error) {
+      console.error('[Profile] Restore failed:', error);
+      showSnackbar({
+        message: 'Could not restore backup. Please try again.',
+        tone: 'error',
+      });
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -141,6 +284,62 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
               Data
             </h3>
 
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleRestoreFileChange}
+              className="hidden"
+            />
+
+            <Button
+              variant="glass"
+              onClick={handleBackupJson}
+              disabled={isExportingJson}
+              className="!w-full !py-3 !rounded-[24px] font-bold !text-[var(--lg-foreground)] flex items-center justify-center gap-2 transition-all"
+              icon={
+                isExportingJson ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-[var(--lg-muted)]" />
+                ) : (
+                  <Download className="w-4 h-4 text-[var(--lg-muted)]" />
+                )
+              }
+            >
+              {isExportingJson ? 'Preparing Backup...' : 'Backup Data'}
+            </Button>
+
+            <Button
+              variant="glass"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isAnalyzingRestore}
+              className="!w-full !py-3 !rounded-[24px] font-bold !text-[var(--lg-foreground)] flex items-center justify-center gap-2 transition-all"
+              icon={
+                isAnalyzingRestore ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-[var(--lg-muted)]" />
+                ) : (
+                  <Upload className="w-4 h-4 text-[var(--lg-muted)]" />
+                )
+              }
+            >
+              {isAnalyzingRestore ? 'Checking Backup...' : 'Restore Backup'}
+            </Button>
+
+            <Button
+              variant="glass"
+              onClick={handleExportCsv}
+              disabled={isExportingCsv}
+              className="!w-full !py-3 !rounded-[24px] font-bold !text-[var(--lg-foreground)] flex items-center justify-center gap-2 transition-all"
+              icon={
+                isExportingCsv ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-[var(--lg-muted)]" />
+                ) : (
+                  <FileSpreadsheet className="w-4 h-4 text-[var(--lg-muted)]" />
+                )
+              }
+            >
+              {isExportingCsv ? 'Exporting...' : 'Export Transactions'}
+            </Button>
+
             <Button
               variant="glass"
               onClick={() => {
@@ -193,6 +392,103 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
         isLoading={isSigningOut}
         disableCancelWhileLoading={true}
       />
+
+      {/* Reusable Glisse Confirmation Dialog for Smart Merge Restore Preview */}
+      <AppDialog
+        isOpen={Boolean(pendingRestore)}
+        onClose={() => setPendingRestore(null)}
+        title="Restore Backup"
+        titleAlign="center"
+        description={
+          pendingRestore ? (
+            pendingRestore.plan.operations.length === 0 ? (
+              <>
+                All <span className="font-semibold">{pendingRestore.plan.totalInBackup}</span> items in{' '}
+                <span className="font-semibold">{pendingRestore.filename}</span> already exist or are up to date. Nothing new to import.
+              </>
+            ) : (
+              <>
+                Existing data is kept safely.{' '}
+                <span className="font-semibold">{pendingRestore.plan.toImportCount} new</span>
+                {pendingRestore.plan.toUpdateCount > 0 && (
+                  <>
+                    {' '}and <span className="font-semibold">{pendingRestore.plan.toUpdateCount} newer</span>
+                  </>
+                )}{' '}
+                will be imported;{' '}
+                <span className="font-semibold">{pendingRestore.plan.skippedCount}</span> already exist and will be skipped.
+              </>
+            )
+          ) : undefined
+        }
+        descriptionAlign="left"
+        tone="default"
+        confirmLabel={
+          pendingRestore && pendingRestore.plan.operations.length > 0
+            ? `Import (${pendingRestore.plan.operations.length})`
+            : 'Import'
+        }
+        confirmLoadingLabel="Importing..."
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmRestore}
+        isLoading={isRestoring}
+        disableConfirm={!pendingRestore || pendingRestore.plan.operations.length === 0}
+        disableCancelWhileLoading={true}
+      >
+        {pendingRestore && (
+          <div className="space-y-2">
+            {/* High-level Merge Summary */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="px-2 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                  +{pendingRestore.plan.toImportCount}
+                </p>
+                <p className="text-[10px] font-semibold text-[var(--lg-muted)] uppercase">New</p>
+              </div>
+              <div className="px-2 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                <p className="text-sm font-extrabold text-blue-600 dark:text-blue-400">
+                  {pendingRestore.plan.toUpdateCount}
+                </p>
+                <p className="text-[10px] font-semibold text-[var(--lg-muted)] uppercase">Updated</p>
+              </div>
+              <div className="px-2 py-2 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10">
+                <p className="text-sm font-extrabold text-[var(--lg-muted)]">
+                  {pendingRestore.plan.skippedCount}
+                </p>
+                <p className="text-[10px] font-semibold text-[var(--lg-muted)] uppercase">Skipped</p>
+              </div>
+            </div>
+
+            {/* Per-Collection Breakdown */}
+            <div className="space-y-1 text-xs px-3 py-2.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10">
+              {(Object.keys(COLLECTION_LABELS) as UserCollectionName[])
+                .filter((col) => {
+                  const s = pendingRestore.plan.byCollection[col];
+                  return s.toImport + s.toUpdate + s.skipped > 0;
+                })
+                .map((col) => {
+                  const s = pendingRestore.plan.byCollection[col];
+                  const incoming = s.toImport + s.toUpdate;
+                  return (
+                    <div key={col} className="flex items-center justify-between py-0.5">
+                      <span className="text-[var(--lg-muted)] font-medium">
+                        {COLLECTION_LABELS[col]}
+                      </span>
+                      <span className="font-semibold text-[var(--lg-foreground)]">
+                        {incoming > 0 ? `+${incoming}` : '0'}
+                        {s.skipped > 0 && (
+                          <span className="text-[var(--lg-muted)] font-normal ml-1.5">
+                            ({s.skipped} skipped)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+      </AppDialog>
 
       {/* Reusable Glisse Confirmation Dialog for Delete All Data */}
       <AppDialog

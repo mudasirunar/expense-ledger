@@ -1,4 +1,5 @@
 import { Obligation, Payment, Allocation } from '../entities';
+import { generateEntityId } from '../utils/id';
 
 export interface AllocationResult {
   updatedObligation: Obligation;
@@ -58,7 +59,7 @@ export class AllocationEngine {
     const newPaymentAllocated = payment.allocatedAmountMinor + amountToAllocate;
     const newPaymentUnallocated = payment.amountMinor - newPaymentAllocated;
 
-    const allocationId = `alloc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const allocationId = generateEntityId('alloc');
     const nowIso = new Date().toISOString();
 
     const allocation: Allocation = {

@@ -6,6 +6,8 @@ import { useSnackbar } from './SnackbarProvider';
 import {
   executeCloudWipe,
   getPendingCloudWipe,
+  subscribeToBackgroundWipeActivity,
+  subscribeToDeletedRecords,
   subscribeToWipeState,
 } from '@/data/sync/dataWipeService';
 
@@ -31,9 +33,24 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { user } = useAuth();
   const { showSnackbar } = useSnackbar();
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
-  const [pendingWritesCount, setPendingWritesCount] = useState<number>(0);
+  const [firestorePendingCount, setFirestorePendingCount] = useState<number>(0);
+  const [isBackgroundWiping, setIsBackgroundWiping] = useState<boolean>(false);
+  const [wipeTick, setWipeTick] = useState<number>(0);
+  const pendingWritesCount = firestorePendingCount + (isBackgroundWiping ? 1 : 0);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(new Date());
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  // Track background cloud wipe activity so avatar ring glows amber while wiping
+  // and immediately recomputes to green once wipe finishes
+  useEffect(() => {
+    return subscribeToBackgroundWipeActivity((active) => {
+      setIsBackgroundWiping(active);
+      if (!active) {
+        setWipeTick((t) => t + 1);
+        setLastSyncTime(new Date());
+      }
+    });
+  }, []);
 
   // Track browser online/offline state
   useEffect(() => {
@@ -75,7 +92,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Monitor real-time Firestore pending local writes (`metadata.hasPendingWrites`)
   useEffect(() => {
     if (!user?.uid) {
-      setPendingWritesCount(0);
+      setFirestorePendingCount(0);
       return;
     }
 
@@ -84,7 +101,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const recomputeTotal = () => {
       const docsPending = Object.values(countsByCollection).reduce((sum, n) => sum + n, 0);
       const wipePending = getPendingCloudWipe(user.uid) ? 1 : 0;
-      setPendingWritesCount(docsPending + wipePending);
+      setFirestorePendingCount(docsPending + wipePending);
     };
 
     const unsubscribers = MONITORED_COLLECTIONS.map((colName) => {
@@ -116,14 +133,19 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
-  }, [user?.uid, isOnline]);
+  }, [user?.uid, isOnline, wipeTick]);
 
-  // Propagate multi-device wipe markers (`users/{uid}/meta/syncState`)
+  // Propagate multi-device wipe markers & deleted_records registry
   useEffect(() => {
     if (!user?.uid) return;
-    return subscribeToWipeState(user.uid, () => {
+    const unsubWipe = subscribeToWipeState(user.uid, () => {
       setLastSyncTime(new Date());
     });
+    const unsubDeleted = subscribeToDeletedRecords(user.uid);
+    return () => {
+      unsubWipe();
+      unsubDeleted();
+    };
   }, [user?.uid]);
 
   // Execute any pending offline cloud wipe automatically on reconnect
@@ -134,7 +156,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     executeCloudWipe(user.uid, pendingWipedAt)
       .then(() => {
-        setPendingWritesCount((prev) => Math.max(0, prev - 1));
+        setFirestorePendingCount((prev) => Math.max(0, prev - 1));
         setLastSyncTime(new Date());
       })
       .catch((err) => {

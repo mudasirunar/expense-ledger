@@ -13,7 +13,12 @@ import {
 import { db } from '@/data/firebase/firestoreClient';
 import { Contact } from '@/domain/entities';
 import { IContactRepository } from '../interfaces';
-import { isRecordActive, sanitizeUpdatePayload } from '@/data/sync/dataWipeService';
+import {
+  isRecordActive,
+  sanitizeUpdatePayload,
+  hardDeleteWithRegistry,
+  stripUndefinedFields,
+} from '@/data/sync/dataWipeService';
 
 export class FirestoreContactRepository implements IContactRepository {
   private getUserContactsCollection(userId: string) {
@@ -70,7 +75,7 @@ export class FirestoreContactRepository implements IContactRepository {
 
   async create(userId: string, contact: Contact): Promise<void> {
     const docRef = doc(db, 'users', userId, 'contacts', contact.id);
-    await setDoc(docRef, { ...contact, isDeleted: false });
+    await setDoc(docRef, stripUndefinedFields({ ...contact, isDeleted: false }));
   }
 
   async update(userId: string, id: string, partial: Partial<Contact>): Promise<void> {
@@ -82,12 +87,16 @@ export class FirestoreContactRepository implements IContactRepository {
   }
 
   async delete(userId: string, id: string): Promise<void> {
-    const now = new Date().toISOString();
-    const docRef = doc(db, 'users', userId, 'contacts', id);
-    await updateDoc(docRef, {
-      isDeleted: true,
-      deletedAt: now,
-      updatedAt: now,
-    });
+    let name = 'Contact';
+    try {
+      const snap = await getDoc(doc(db, 'users', userId, 'contacts', id));
+      if (snap.exists()) {
+        const data = snap.data() as Partial<Contact>;
+        if (data.name) name = data.name;
+      }
+    } catch {
+      // Fallback to default label if offline & uncached
+    }
+    await hardDeleteWithRegistry(userId, 'contacts', id, name);
   }
 }

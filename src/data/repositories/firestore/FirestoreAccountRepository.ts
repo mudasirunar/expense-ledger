@@ -12,7 +12,11 @@ import {
 import { db } from '@/data/firebase/firestoreClient';
 import { Account } from '@/domain/entities';
 import { IAccountRepository } from '../interfaces';
-import { isRecordActive, sanitizeUpdatePayload } from '@/data/sync/dataWipeService';
+import {
+  isRecordActive,
+  sanitizeUpdatePayload,
+  stripUndefinedFields,
+} from '@/data/sync/dataWipeService';
 
 export class FirestoreAccountRepository implements IAccountRepository {
   private getUserAccountsCollection(userId: string) {
@@ -58,7 +62,7 @@ export class FirestoreAccountRepository implements IAccountRepository {
 
   async create(userId: string, account: Account): Promise<void> {
     const docRef = doc(db, 'users', userId, 'accounts', account.id);
-    await setDoc(docRef, { ...account, isDeleted: false });
+    await setDoc(docRef, stripUndefinedFields({ ...account, isDeleted: false }));
   }
 
   async update(userId: string, id: string, partial: Partial<Account>): Promise<void> {

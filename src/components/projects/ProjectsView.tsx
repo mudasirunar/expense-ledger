@@ -14,7 +14,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
-import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
+import { registerMemoryCacheClearer, awaitLocalCommit } from '@/data/sync/dataWipeService';
+import { generateEntityId } from '@/domain/utils/id';
 
 const projectRepo = new FirestoreProjectRepository();
 
@@ -95,7 +96,7 @@ export const ProjectsView: React.FC = () => {
 
     try {
       const newProject: Project = {
-        id: `prj-${Date.now()}`,
+        id: generateEntityId('prj'),
         name: name.trim(),
         code: code.trim() || undefined,
         budgetMinor: Math.round(budgetParsed * 100),
@@ -107,8 +108,10 @@ export const ProjectsView: React.FC = () => {
         updatedAt: new Date().toISOString(),
       };
 
-      await projectRepo.create(userId, newProject);
-      setProjects((prev) => [newProject, ...prev]);
+      await awaitLocalCommit(projectRepo.create(userId, newProject));
+      setProjects((prev) =>
+        prev.some((p) => p.id === newProject.id) ? prev : [newProject, ...prev]
+      );
       setIsCreateOpen(false);
       resetForm();
     } catch (err: unknown) {

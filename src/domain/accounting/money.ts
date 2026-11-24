@@ -33,6 +33,10 @@ export class Money {
     return Money.fromMinor(minorUnits, currency).format(locale);
   }
 
+  static toMajorString(minorUnits: number): string {
+    return (Money.fromMinor(minorUnits).minorUnits / 100).toFixed(2);
+  }
+
   add(other: Money): Money {
     this.assertMatchingCurrency(other);
     return new Money(this.minorUnits + other.minorUnits, this.currency);

@@ -12,7 +12,12 @@ import {
 import { db } from '@/data/firebase/firestoreClient';
 import { Project } from '@/domain/entities';
 import { IProjectRepository } from '../interfaces';
-import { isRecordActive, sanitizeUpdatePayload } from '@/data/sync/dataWipeService';
+import {
+  isRecordActive,
+  sanitizeUpdatePayload,
+  hardDeleteWithRegistry,
+  stripUndefinedFields,
+} from '@/data/sync/dataWipeService';
 
 export class FirestoreProjectRepository implements IProjectRepository {
   private getUserProjectsCollection(userId: string) {
@@ -58,7 +63,7 @@ export class FirestoreProjectRepository implements IProjectRepository {
 
   async create(userId: string, project: Project): Promise<void> {
     const docRef = doc(db, 'users', userId, 'projects', project.id);
-    await setDoc(docRef, { ...project, isDeleted: false });
+    await setDoc(docRef, stripUndefinedFields({ ...project, isDeleted: false }));
   }
 
   async update(userId: string, id: string, partial: Partial<Project>): Promise<void> {
@@ -70,12 +75,16 @@ export class FirestoreProjectRepository implements IProjectRepository {
   }
 
   async delete(userId: string, id: string): Promise<void> {
-    const now = new Date().toISOString();
-    const docRef = doc(db, 'users', userId, 'projects', id);
-    await updateDoc(docRef, {
-      isDeleted: true,
-      deletedAt: now,
-      updatedAt: now,
-    });
+    let name = 'Project';
+    try {
+      const snap = await getDoc(doc(db, 'users', userId, 'projects', id));
+      if (snap.exists()) {
+        const data = snap.data() as Partial<Project>;
+        if (data.name) name = data.name;
+      }
+    } catch {
+      // Fallback to default label if offline & uncached
+    }
+    await hardDeleteWithRegistry(userId, 'projects', id, name);
   }
 }

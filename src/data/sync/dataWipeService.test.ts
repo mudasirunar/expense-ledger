@@ -33,14 +33,17 @@ vi.mock('@/data/firebase/firestoreClient', () => ({
 }));
 
 import {
+  DELETED_RECORDS_COLLECTION,
   USER_DATA_COLLECTIONS,
   isRecordActive,
   sanitizeUpdatePayload,
   setLocalWipedAt,
   getLocalWipedAt,
   getPendingCloudWipe,
+  getLocalDeletedIds,
   registerMemoryCacheClearer,
   clearAllMemoryCaches,
+  hardDeleteWithRegistry,
   wipeAllUserData,
   executeCloudWipe,
   subscribeToWipeState,
@@ -161,8 +164,8 @@ describe('Delete-Wins Tombstone & Local/Remote Data Wipe Service', () => {
       { merge: true }
     );
 
-    // 3. All 7 collections scanned
-    expect(mockGetDocs).toHaveBeenCalledTimes(USER_DATA_COLLECTIONS.length);
+    // 3. All 7 main collections + deleted_records scanned
+    expect(mockGetDocs).toHaveBeenCalledTimes(USER_DATA_COLLECTIONS.length + 1);
 
     // 4. Only pre-wipe and tombstoned docs hard-deleted; post-wipe doc preserved
     expect(result.cloudSynced).toBe(true);
@@ -273,5 +276,23 @@ describe('Delete-Wins Tombstone & Local/Remote Data Wipe Service', () => {
     expect(mockGetDocs).toHaveBeenCalled();
 
     unregister();
+  });
+
+  it('hardDeleteWithRegistry permanently deletes from main collection, logs to deleted_records, and hides locally', async () => {
+    await hardDeleteWithRegistry(userId, 'projects', 'prj-abc', 'Tower A');
+
+    expect(getLocalDeletedIds(userId).has('prj-abc')).toBe(true);
+    expect(isRecordActive(userId, { id: 'prj-abc', createdAt: '2026-11-25T00:00:00.000Z' })).toBe(false);
+
+    expect(mockBatchDelete).toHaveBeenCalledWith({ path: `users/${userId}/projects/prj-abc` });
+    expect(mockBatchSet).toHaveBeenCalledWith(
+      { path: `users/${userId}/${DELETED_RECORDS_COLLECTION}/prj-abc` },
+      expect.objectContaining({
+        id: 'prj-abc',
+        collection: 'projects',
+        name: 'Tower A',
+      })
+    );
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
   });
 });

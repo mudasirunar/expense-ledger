@@ -6,6 +6,7 @@ import {
   MaterialDetails 
 } from '../entities';
 import { AllocationEngine } from '../accounting/allocationEngine';
+import { generateEntityId } from '../utils/id';
 
 /**
  * Pure Domain Use Cases
@@ -32,7 +33,7 @@ export class DomainUseCases {
 
     const now = new Date().toISOString();
     return {
-      id: `prj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id: generateEntityId('prj'),
       name: params.name.trim(),
       code: params.code?.trim(),
       description: params.description?.trim(),
@@ -66,8 +67,8 @@ export class DomainUseCases {
 
     const now = new Date().toISOString();
     return {
-      id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      idempotencyKey: `idem-tx-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: generateEntityId('tx'),
+      idempotencyKey: generateEntityId('idem-tx'),
       type: 'expense',
       scope: params.scope,
       projectId: params.projectId,
@@ -99,8 +100,8 @@ export class DomainUseCases {
 
     const now = new Date().toISOString();
     return {
-      id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      idempotencyKey: `idem-tx-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: generateEntityId('tx'),
+      idempotencyKey: generateEntityId('idem-tx'),
       type: 'income',
       scope: params.scope,
       projectId: params.projectId,
@@ -134,7 +135,7 @@ export class DomainUseCases {
 
     const now = new Date().toISOString();
     return {
-      id: `obl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id: generateEntityId('obl'),
       type: 'purchase',
       direction: 'payable',
       projectId: params.projectId,
@@ -168,8 +169,8 @@ export class DomainUseCases {
 
     const now = new Date().toISOString();
     return {
-      id: `pay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      idempotencyKey: `idem-pay-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: generateEntityId('pay'),
+      idempotencyKey: generateEntityId('idem-pay'),
       direction: 'outgoing',
       accountId: params.accountId,
       contactId: params.contactId,
@@ -211,8 +212,8 @@ export class DomainUseCases {
 
     const now = new Date().toISOString();
     return {
-      id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      idempotencyKey: `idem-tx-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: generateEntityId('tx'),
+      idempotencyKey: generateEntityId('idem-tx'),
       type: 'transfer',
       scope: 'personal',
       accountId: params.sourceAccountId,

@@ -14,7 +14,7 @@ import {
 import { db } from '@/data/firebase/firestoreClient';
 import { Payment, Allocation } from '@/domain/entities';
 import { IPaymentRepository, PaymentFilter } from '../interfaces';
-import { isRecordActive } from '@/data/sync/dataWipeService';
+import { isRecordActive, stripUndefinedFields } from '@/data/sync/dataWipeService';
 
 export class FirestorePaymentRepository implements IPaymentRepository {
   private getUserPaymentsCollection(userId: string) {
@@ -74,12 +74,12 @@ export class FirestorePaymentRepository implements IPaymentRepository {
     const batch = writeBatch(db);
 
     const paymentDocRef = doc(db, 'users', userId, 'payments', payment.id);
-    batch.set(paymentDocRef, { ...payment, isDeleted: false });
+    batch.set(paymentDocRef, stripUndefinedFields({ ...payment, isDeleted: false }));
 
     if (allocations && allocations.length > 0) {
       for (const alloc of allocations) {
         const allocDocRef = doc(db, 'users', userId, 'allocations', alloc.id);
-        batch.set(allocDocRef, { ...alloc, isDeleted: false });
+        batch.set(allocDocRef, stripUndefinedFields({ ...alloc, isDeleted: false }));
       }
     }
 

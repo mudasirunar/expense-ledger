@@ -14,7 +14,8 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
-import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
+import { registerMemoryCacheClearer, awaitLocalCommit } from '@/data/sync/dataWipeService';
+import { generateEntityId } from '@/domain/utils/id';
 
 const contactRepo = new FirestoreContactRepository();
 const paymentRepo = new FirestorePaymentRepository();
@@ -116,7 +117,7 @@ export const ContactsView: React.FC = () => {
 
     try {
       const newContact: Contact = {
-        id: `cnt-${Date.now()}`,
+        id: generateEntityId('cnt'),
         name: name.trim(),
         companyName: companyName.trim() || undefined,
         phone: phone.trim() || undefined,
@@ -128,8 +129,10 @@ export const ContactsView: React.FC = () => {
         updatedAt: new Date().toISOString(),
       };
 
-      await contactRepo.create(userId, newContact);
-      setContacts((prev) => [newContact, ...prev]);
+      await awaitLocalCommit(contactRepo.create(userId, newContact));
+      setContacts((prev) =>
+        prev.some((c) => c.id === newContact.id) ? prev : [newContact, ...prev]
+      );
       setIsCreateOpen(false);
       resetForm();
     } catch (err: unknown) {
