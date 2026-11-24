@@ -23,7 +23,8 @@
         try {
           var saved = localStorage.getItem('expense_ledger_theme');
           var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          var isDark = saved === 'dark' || (!saved && prefersDark);
+          // Defaults to 'system': follows OS prefers-color-scheme unless explicitly set to 'dark' or 'light'
+          var isDark = saved === 'dark' || ((!saved || saved === 'system') && prefersDark);
           var html = document.documentElement;
           if (isDark) {
             html.classList.add('dark');

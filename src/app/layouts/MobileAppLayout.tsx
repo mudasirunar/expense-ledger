@@ -7,6 +7,7 @@ interface MobileAppLayoutProps {
   currentTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   onQuickAdd: () => void;
+  onOpenProfile?: () => void;
   title: string;
   subtitle?: string;
   children: React.ReactNode;
@@ -16,6 +17,7 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({
   currentTab,
   onTabChange,
   onQuickAdd,
+  onOpenProfile,
   title,
   subtitle,
   children
@@ -38,7 +40,11 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({
       />
 
       {/* Clean Top Header */}
-      <TopHeader title={title} subtitle={subtitle} />
+      <TopHeader 
+        title={title} 
+        subtitle={subtitle} 
+        onOpenProfile={onOpenProfile} 
+      />
 
       {/* Main View with Dedicated Pull-To-Refresh */}
       <PullToRefresh>

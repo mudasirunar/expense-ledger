@@ -5,11 +5,15 @@
 The interface strictly adopts Apple's **Liquid Glass** aesthetic via the **Glisse** component framework (`glisse` library by Kelvin Zhang), combined with Tailwind CSS tokens. The application must look, behave, and feel like an official native iOS 18 / visionOS application.
 
 ### 1.1 Apple Liquid Glass (Glisse) Core UI Standards
-* **Glisse Everywhere:** All primary interactive controls and surfaces must utilize Glisse components or Glisse liquid glass styling:
+* **Flat-on-Screen Layout Philosophy (Default):**
+  * **Flat Canvas First:** Render screen content, lists, detail sections, and settings directly on the main page canvas rather than boxing every section inside cards.
+  * **Horizontal Dividers:** Separate logical sections, groups, and list items using clean, subtle horizontal dividers (`border-b border-[var(--lg-separator)]`) instead of stacked card containers.
+  * **Minimal Cards (Use Only Where Needed):** Avoid card-heavy layouts. Use elevated/glass card containers sparingly—only when a section genuinely needs visual isolation (e.g., a primary hero summary or an interactive callout).
+* **Glisse for Interactive Controls & Floating Chrome:** All primary interactive controls and floating surfaces utilize Glisse components (`glisse`):
   * **Bottom Navigation Bar:** Floating translucent glass dock hovering over scrollable content with real-time backdrop blur.
-  * **Top App Bar:** Liquid frosted glass header with dynamic optical refraction as content scrolls underneath.
+  * **Top App Bar:** Clean header aligned with the canvas background and Glisse glass action buttons.
   * **Interactive Controls:** Glisse buttons, switches, sliders, segmented controls, and dropdowns.
-  * **Data Cards:** Translucent glass container cards with specular border highlights and inner glow.
+  * **Selective Data Cards (When Needed):** Translucent glass container cards with specular border highlights, used sparingly.
   * **Forms & Text Inputs:** Glass-backed input fields with high-contrast text and subtle refractive focus rings.
   * **Modals & Drawers:** Frosted bottom sheets with layered background blur.
 

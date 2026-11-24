@@ -13,8 +13,9 @@ You are responsible for maintaining a reliable, production-grade **Personal Fina
 4. **No Direct Firestore Writes from Presentation:** UI components must call application use cases, which validate and route writes through typed repositories.
 5. **No Silent History Deletion:** Financial history is immutable. Corrections must be handled through void flags, reversal transactions, and append-only audit events.
 6. **Strict Git Discipline:** Git operations are prohibited unless explicitly and specifically authorized by the project owner.
-7. **Apple Liquid Glass (Glisse) UI Mandate:** All UI surfaces, buttons, top headers, floating bottom docks, text fields, segmented controls, cards, and bottom sheets must strictly utilize Glisse (`glisse` package) and Apple Liquid Glass design principles.
+7. **Apple Liquid Glass (Glisse) Controls & Flat-on-Screen UI:** Use Glisse (`glisse` package) for interactive controls, floating bottom docks, buttons, segmented controls, text fields, and bottom sheets. Keep page layouts predominantly **flat-on-screen** directly on the canvas separated by clean **horizontal dividers**—avoid card-heavy designs and use cards sparingly only where genuinely needed.
 8. **Zero-Flicker Theme Adaptability (FOIT Prevention):** The app must seamlessly support Light, Dark, and System modes with persistent `localStorage` and a synchronous blocking head script to guarantee zero flash/flicker of incorrect theme on initial load or reload.
+9. **App Version Awareness & Approval:** Keep track of app version changes (`package.json` `version`, auto-detected via `__APP_VERSION__`). Whenever meaningful features, fixes, or milestones make it the right time to bump the version, remind and **always ask the project owner first**—only update the version after explicit approval.
 
 ---
 

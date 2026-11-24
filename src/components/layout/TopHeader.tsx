@@ -1,19 +1,18 @@
 import React from 'react';
-import { RotateCw, WifiOff, Cloud, RefreshCw, Sun, Moon, LogOut } from 'lucide-react';
+import { RotateCw, WifiOff, Cloud, RefreshCw, User } from 'lucide-react';
 import { useSync } from '@/app/providers/SyncProvider';
-import { useTheme } from '@/app/providers/ThemeProvider';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { Button } from 'glisse';
 
 interface TopHeaderProps {
   title: string;
   subtitle?: string;
+  onOpenProfile?: () => void;
 }
 
-export const TopHeader: React.FC<TopHeaderProps> = ({ title, subtitle }) => {
+export const TopHeader: React.FC<TopHeaderProps> = ({ title, subtitle, onOpenProfile }) => {
   const { isOnline, pendingWritesCount, triggerManualRefresh, isRefreshing } = useSync();
-  const { isDark, toggleTheme } = useTheme();
-  const { user, signOutUser } = useAuth();
+  const { user } = useAuth();
 
   return (
     <header className="z-30 w-full bg-[#E2DDD5] dark:bg-background border-none px-4 py-2.5 flex items-center justify-between select-none transition-colors duration-200">
@@ -41,15 +40,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ title, subtitle }) => {
           </div>
         )}
 
-        {/* Glisse Apple Liquid Glass Theme Switcher */}
-        <Button
-          variant="glass"
-          aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
-          onClick={toggleTheme}
-          icon={isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-blue-600" />}
-          className="!p-2 !rounded-full !w-9 !h-9"
-        />
-
         {/* Glisse Apple Liquid Glass Refresh Button */}
         <Button
           variant="glass"
@@ -60,16 +50,26 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ title, subtitle }) => {
           className="!p-2 !rounded-full !w-9 !h-9"
         />
 
-        {/* User Sign-out if authenticated */}
-        {user && (
-          <Button
-            variant="glass"
-            aria-label="Sign out"
-            onClick={() => signOutUser()}
-            icon={<LogOut className="w-4 h-4 text-rose-500" />}
-            className="!p-2 !rounded-full !w-9 !h-9"
-          />
-        )}
+        {/* Profile Screen Button */}
+        <button
+          onClick={onOpenProfile}
+          aria-label="Open profile"
+          className="relative w-9 h-9 rounded-full flex items-center justify-center border border-[var(--lg-surface-edge)] bg-[var(--lg-glass)] backdrop-blur-md hover:scale-105 active:scale-95 transition-all shadow-sm overflow-hidden"
+        >
+          {user?.photoURL ? (
+            <img
+              src={user.photoURL}
+              alt={user.displayName || 'Profile'}
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <User className="w-4 h-4 text-[var(--lg-foreground)]" />
+          )}
+        </button>
       </div>
     </header>
   );

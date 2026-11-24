@@ -8,6 +8,7 @@ import { ProjectsView } from '@/components/projects/ProjectsView';
 import { ContactsView } from '@/components/contacts/ContactsView';
 import { AccountsView } from '@/components/accounts/AccountsView';
 import { QuickAddModal } from '@/components/entry/QuickAddModal';
+import { ProfileView } from '@/components/profile/ProfileView';
 import { FirestoreAccountRepository, FirestoreTransactionRepository } from '@/data/repositories/firestore';
 import { Account, Transaction } from '@/domain/entities';
 import { Money } from '@/domain/accounting/money';
@@ -243,10 +244,103 @@ const DashboardOverview: React.FC<{ onRefreshKey: number }> = ({ onRefreshKey })
   );
 };
 
+const VALID_TABS: NavTab[] = ['dashboard', 'projects', 'contacts', 'accounts'];
+const LAST_TAB_STORAGE_KEY = 'ledger_last_tab';
+
+function parseHashRoute(): { screen: 'main' | 'profile'; tab: NavTab | null } {
+  if (typeof window === 'undefined') return { screen: 'main', tab: null };
+  const raw = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+  if (raw === 'profile') {
+    return { screen: 'profile', tab: null };
+  }
+  if (VALID_TABS.includes(raw as NavTab)) {
+    return { screen: 'main', tab: raw as NavTab };
+  }
+  return { screen: 'main', tab: null };
+}
+
+function getSavedTab(): NavTab {
+  try {
+    const saved = sessionStorage.getItem(LAST_TAB_STORAGE_KEY) as NavTab | null;
+    if (saved && VALID_TABS.includes(saved)) return saved;
+  } catch {
+    // ignore storage errors
+  }
+  return 'dashboard';
+}
+
 export const AppContent: React.FC = () => {
-  const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
+  const [currentTab, setCurrentTab] = useState<NavTab>(() => {
+    const route = parseHashRoute();
+    return route.tab ?? getSavedTab();
+  });
+  const [isProfileScreen, setIsProfileScreen] = useState<boolean>(() => {
+    return parseHashRoute().screen === 'profile';
+  });
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
+
+  // Sync with browser hash navigation (supports refresh & native back/forward)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const route = parseHashRoute();
+      if (route.screen === 'profile') {
+        setIsProfileScreen(true);
+      } else {
+        setIsProfileScreen(false);
+        if (route.tab) {
+          setCurrentTab(route.tab);
+          try {
+            sessionStorage.setItem(LAST_TAB_STORAGE_KEY, route.tab);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const handleTabChange = (tab: NavTab) => {
+    setCurrentTab(tab);
+    setIsProfileScreen(false);
+    try {
+      sessionStorage.setItem(LAST_TAB_STORAGE_KEY, tab);
+    } catch {
+      // ignore
+    }
+    const targetHash = tab === 'dashboard' ? '#/dashboard' : `#/${tab}`;
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash;
+    }
+  };
+
+  const handleOpenProfile = () => {
+    try {
+      sessionStorage.setItem(LAST_TAB_STORAGE_KEY, currentTab);
+    } catch {
+      // ignore
+    }
+    setIsProfileScreen(true);
+    if (window.location.hash !== '#/profile') {
+      window.location.hash = '#/profile';
+    }
+  };
+
+  const handleBackFromProfile = () => {
+    const returnTab = currentTab || getSavedTab();
+    setIsProfileScreen(false);
+    const targetHash = `#/${returnTab}`;
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash;
+    }
+  };
+
+  if (isProfileScreen) {
+    return <ProfileView onBack={handleBackFromProfile} />;
+  }
 
   const getHeaderMeta = () => {
     switch (currentTab) {
@@ -269,8 +363,9 @@ export const AppContent: React.FC = () => {
     <>
       <MobileAppLayout
         currentTab={currentTab}
-        onTabChange={setCurrentTab}
+        onTabChange={handleTabChange}
         onQuickAdd={() => setIsQuickAddOpen(true)}
+        onOpenProfile={handleOpenProfile}
         title={title}
         subtitle={subtitle}
       >

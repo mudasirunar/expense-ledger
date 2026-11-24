@@ -244,6 +244,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
 
     try {
+      try {
+        sessionStorage.removeItem('ledger_last_tab');
+      } catch {
+        // ignore storage errors
+      }
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}${window.location.search}#/dashboard`
+        );
+      }
       await signInWithPopup(auth, googleAuthProvider);
     } catch (err: unknown) {
       const authErr = err as { code?: string; message?: string };
@@ -266,6 +278,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       await signOut(auth);
+      try {
+        sessionStorage.removeItem('ledger_last_tab');
+      } catch {
+        // ignore storage errors
+      }
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}${window.location.search}`
+        );
+      }
       setUser(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Sign-out failed');
