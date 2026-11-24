@@ -223,7 +223,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
   const initial = (displayName[0] || 'U').toUpperCase();
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full bg-[#E2DDD5] dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
+    <div className="flex flex-col app-screen w-full bg-[#E2DDD5] dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
       {/* Status Bar Ceiling Spacer: Matches main layout for PWA safe area */}
       <div
         className="w-full flex-shrink-0 bg-transparent select-none pointer-events-none pwa-top-spacer"
@@ -249,7 +249,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
       </header>
 
       {/* Standalone Scrollable Flat Body */}
-      <div className="flex-1 overflow-y-auto overscroll-y-contain">
+      <div className="flex-1 overflow-y-auto scroll-container overscroll-y-contain">
         <main className="max-w-md sm:max-w-lg mx-auto w-full px-4 pt-4 pb-10 space-y-6">
           {/* Profile Identity (Flat on screen, no card) */}
           <section className="flex items-center gap-4">

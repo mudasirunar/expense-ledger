@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from 'glisse';
 import { ModalPortal } from '@/components/common/ModalPortal';
@@ -87,43 +87,9 @@ export const AppDialog: React.FC<AppDialogProps> = ({
   const isConfirmDisabled = disableConfirm || isLoading;
   const styles = TONE_STYLES[tone];
   const overlayRef = useRef<HTMLDivElement>(null);
-  const [visualViewportBox, setVisualViewportBox] = useState<{
-    height: number;
-    offsetTop: number;
-  } | null>(null);
-
-  // Track mobile virtual keyboard via VisualViewport API so dialog stays centered above keyboard
-  useEffect(() => {
-    if (!isOpen || typeof window === 'undefined' || !window.visualViewport) {
-      setVisualViewportBox(null);
-      return;
-    }
-
-    const vv = window.visualViewport;
-    const syncViewport = () => {
-      setVisualViewportBox({
-        height: vv.height,
-        offsetTop: vv.offsetTop,
-      });
-    };
-
-    syncViewport();
-    vv.addEventListener('resize', syncViewport);
-    vv.addEventListener('scroll', syncViewport);
-
-    return () => {
-      vv.removeEventListener('resize', syncViewport);
-      vv.removeEventListener('scroll', syncViewport);
-    };
-  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
-
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isLoading) {
@@ -146,8 +112,6 @@ export const AppDialog: React.FC<AppDialogProps> = ({
     overlayEl?.addEventListener('wheel', preventBackgroundScroll, { passive: false });
 
     return () => {
-      document.body.style.overflow = prevBodyOverflow;
-      document.documentElement.style.overflow = prevHtmlOverflow;
       window.removeEventListener('keydown', handleKeyDown);
       overlayEl?.removeEventListener('touchmove', preventBackgroundScroll);
       overlayEl?.removeEventListener('wheel', preventBackgroundScroll);
@@ -163,11 +127,11 @@ export const AppDialog: React.FC<AppDialogProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="app-dialog-title"
-        className="fixed inset-0 z-50 touch-none overscroll-none animate-fade-in"
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 touch-none overscroll-none animate-fade-in"
       >
-        {/* Full-Screen Dimmed Blur Backdrop (matches all other app modals) */}
+        {/* Full-Screen Dimmed Blur Backdrop */}
         <div
-          className="fixed inset-0 bg-black/20 dark:bg-black/60 backdrop-blur-sm transition-opacity touch-none"
+          className="fixed inset-0 bg-black/20 dark:bg-black/60 backdrop-blur-sm touch-none"
           onClick={() => {
             if (closeOnBackdrop && !isLoading) {
               onClose();
@@ -175,82 +139,66 @@ export const AppDialog: React.FC<AppDialogProps> = ({
           }}
         />
 
-        {/* Visual-Viewport-Aware Centering Frame (lifts dialog cleanly above mobile keyboard) */}
-        <div
-          className="fixed left-0 right-0 z-10 flex items-center justify-center p-3 sm:p-4 pointer-events-none transition-[height,top] duration-150 ease-out"
-          style={
-            visualViewportBox
-              ? {
-                  top: `${visualViewportBox.offsetTop}px`,
-                  height: `${visualViewportBox.height}px`,
-                }
-              : {
-                  top: 0,
-                  bottom: 0,
-                }
-          }
-        >
-          {/* Unified Modal Surface (matches QuickAdd / Projects / Contacts / Accounts modals) */}
-          <div className="pointer-events-auto relative w-full max-w-[340px] sm:max-w-sm max-h-full overflow-y-auto overscroll-contain rounded-3xl p-5 sm:p-6 shadow-2xl box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl">
-            <div className="flex flex-col w-full">
-              {icon && (
-                <div
-                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3.5 ${ALIGN_SELF[iconAlign]} ${styles.iconBox}`}
-                >
-                  {icon}
-                </div>
-              )}
-
-              <h2
-                id="app-dialog-title"
-                className={`w-full text-base font-extrabold text-[var(--lg-foreground)] tracking-tight ${TEXT_ALIGN[titleAlign]}`}
+        {/* Unified Modal Surface (matches QuickAdd / Projects / Contacts / Accounts modals) */}
+        <div className="relative z-10 w-full max-w-[340px] sm:max-w-sm max-h-[85vh] overflow-y-auto overscroll-contain rounded-3xl p-5 sm:p-6 shadow-2xl box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl">
+          <div className="flex flex-col w-full">
+            {icon && (
+              <div
+                className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3.5 ${ALIGN_SELF[iconAlign]} ${styles.iconBox}`}
               >
-                {title}
-              </h2>
+                {icon}
+              </div>
+            )}
 
-              {description && (
-                <p className={`w-full mt-2 text-xs text-[var(--lg-muted)] leading-relaxed ${TEXT_ALIGN[descriptionAlign]}`}>
-                  {description}
-                </p>
-              )}
+            <h2
+              id="app-dialog-title"
+              className={`w-full text-base font-extrabold text-[var(--lg-foreground)] tracking-tight ${TEXT_ALIGN[titleAlign]}`}
+            >
+              {title}
+            </h2>
 
-              {children && (
-                <div className="w-full mt-4 text-left">
-                  {children}
-                </div>
-              )}
-            </div>
+            {description && (
+              <p className={`w-full mt-2 text-xs text-[var(--lg-muted)] leading-relaxed ${TEXT_ALIGN[descriptionAlign]}`}>
+                {description}
+              </p>
+            )}
 
-            {/* Action Buttons (Unified Glisse style matching Add modals) */}
-            <div className="grid grid-cols-2 gap-2.5 mt-5">
-              <Button
-                variant="glass"
-                type="button"
-                onClick={onClose}
-                disabled={isCancelDisabled}
-                className={`!w-full !py-2.5 !rounded-[24px] font-semibold !text-sm flex items-center justify-center transition-all ${
-                  isCancelDisabled
-                    ? '!opacity-40 !cursor-not-allowed !pointer-events-none !text-[var(--lg-muted)]'
-                    : '!text-[var(--lg-foreground)]'
-                }`}
-              >
-                {cancelLabel}
-              </Button>
+            {children && (
+              <div className="w-full mt-4 text-left">
+                {children}
+              </div>
+            )}
+          </div>
 
-              <Button
-                variant="filled"
-                tint={styles.tint}
-                type="button"
-                onClick={() => onConfirm()}
-                disabled={isConfirmDisabled}
-                className={`!w-full !py-2.5 !rounded-[24px] font-semibold !text-sm flex items-center justify-center gap-1.5 transition-all ${
-                  isConfirmDisabled ? '!opacity-55 !cursor-not-allowed !pointer-events-none' : ''
-                }`}
-                icon={isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
-              >
-                {isLoading && confirmLoadingLabel ? confirmLoadingLabel : confirmLabel}
-              </Button>
-            </div>
+          {/* Action Buttons (Unified Glisse style matching Add modals) */}
+          <div className="grid grid-cols-2 gap-2.5 mt-5">
+            <Button
+              variant="glass"
+              type="button"
+              onClick={onClose}
+              disabled={isCancelDisabled}
+              className={`!w-full !py-2.5 !rounded-[24px] font-semibold !text-sm flex items-center justify-center transition-all ${
+                isCancelDisabled
+                  ? '!opacity-40 !cursor-not-allowed !pointer-events-none !text-[var(--lg-muted)]'
+                  : '!text-[var(--lg-foreground)]'
+              }`}
+            >
+              {cancelLabel}
+            </Button>
+
+            <Button
+              variant="filled"
+              tint={styles.tint}
+              type="button"
+              onClick={() => onConfirm()}
+              disabled={isConfirmDisabled}
+              className={`!w-full !py-2.5 !rounded-[24px] font-semibold !text-sm flex items-center justify-center gap-1.5 transition-all ${
+                isConfirmDisabled ? '!opacity-55 !cursor-not-allowed !pointer-events-none' : ''
+              }`}
+              icon={isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+            >
+              {isLoading && confirmLoadingLabel ? confirmLoadingLabel : confirmLabel}
+            </Button>
           </div>
         </div>
       </div>

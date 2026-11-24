@@ -19,39 +19,46 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     {
       value: 'dashboard',
       label: 'Overview',
-      icon: <LayoutDashboard className="w-5 h-5" />,
+      icon: <LayoutDashboard className="w-[21px] h-[21px]" />,
     },
     {
       value: 'projects',
       label: 'Projects',
-      icon: <Building2 className="w-5 h-5" />,
+      icon: <Building2 className="w-[21px] h-[21px]" />,
     },
     {
       value: 'contacts',
       label: 'Contacts',
-      icon: <Users className="w-5 h-5" />,
+      icon: <Users className="w-[21px] h-[21px]" />,
     },
     {
       value: 'accounts',
       label: 'Accounts',
-      icon: <Wallet className="w-5 h-5" />,
+      icon: <Wallet className="w-[21px] h-[21px]" />,
     },
   ];
 
   return (
-    <nav 
+    <nav
       aria-label="Bottom Navigation"
-      className="fixed bottom-3 left-0 right-0 z-40 pointer-events-none flex justify-center px-3"
+      className="fixed left-0 right-0 z-40 pointer-events-none flex justify-center px-4"
+      style={{
+        bottom: 'max(0.75rem, calc(env(safe-area-inset-bottom, 0px) - 12px))',
+      }}
     >
-      {/* Glisse Apple Liquid Glass Dock: Centered together with no desktop gap and no mobile squeeze */}
-      <div className="flex items-center justify-center gap-2 pointer-events-auto">
+      {/* Glisse Apple Liquid Glass Dock: Scales responsively to align cleanly with main card edges on all iPhone / Android / Desktop widths */}
+      <div className="w-full max-w-md flex items-center justify-between gap-2.5 pointer-events-auto">
         <TabBar
           items={tabItems}
           value={currentTab}
           onValueChange={(val) => {
             if (val) onTabChange(val as NavTab);
           }}
-          style={{ '--lg-tab-width': '66px' } as React.CSSProperties}
+          className="flex-1"
+          style={{
+            '--lg-tab-width': 'clamp(66px, calc((100vw - 110px) / 4), 84px)',
+            '--lg-tab-height': '54px',
+          } as React.CSSProperties}
         />
 
         {/* Glisse Official Filled Button for Quick Add */}
@@ -60,8 +67,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           tint="#2563EB"
           aria-label="Record new transaction or obligation"
           onClick={onQuickAdd}
-          icon={<Plus className="w-5 h-5 stroke-[2.5]" />}
-          className="!rounded-full !w-12 !h-12 !p-0 shadow-lg shadow-blue-600/30 flex-shrink-0"
+          icon={<Plus className="w-6 h-6 stroke-[2.5]" />}
+          className="!rounded-full !w-[54px] !h-[54px] !p-0 shadow-lg shadow-blue-600/30 flex-shrink-0"
         />
       </div>
     </nav>

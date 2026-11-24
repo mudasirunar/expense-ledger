@@ -28,7 +28,7 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({
   );
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full bg-[#E2DDD5] dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
+    <div className="flex flex-col app-screen w-full bg-[#E2DDD5] dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
       {/* Status Bar Ceiling Spacer: Shifted slightly down for PWA to avoid iOS status bar scrim */}
       <div 
         className="w-full flex-shrink-0 bg-transparent select-none pointer-events-none pwa-top-spacer" 

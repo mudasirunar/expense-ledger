@@ -39,10 +39,35 @@ html.dark .dark\:bg-background {
   background-color: #0B0F19 !important;
 }
 
-/* PWA Standalone layout: shift top bar slightly down to avoid iOS status bar scrim overlay */
+/* PWA Standalone layout: shift top bar slightly down to avoid iOS status bar scrim overlay
+   and lock full static screen height (100lvh) so background stays intact behind iOS translucent keyboard */
+.app-screen {
+  height: 100dvh;
+}
+
 @media all and (display-mode: standalone) {
+  html, body, #root {
+    min-height: 100vh;
+    min-height: 100lvh;
+  }
+
+  .app-screen {
+    height: 100vh;
+    height: 100lvh;
+  }
+
   .pwa-top-spacer {
     height: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+  }
+}
+
+/* Prevent iOS Safari / Standalone PWA auto-zoom & viewport shift when focusing inputs < 16px (e.g. Glisse 14px inputs) */
+@media (max-width: 767px) {
+  .lg-input input,
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px !important;
   }
 }
 
@@ -69,6 +94,13 @@ body.modal-open #root,
 body.modal-open .scroll-container {
   overflow: hidden !important;
   overscroll-behavior: contain !important;
+}
+
+/* Modals re-center inside the visible area above the iOS keyboard; background stays static.
+   Small fixed gap (0.75rem) between dialog and keyboard. */
+body.modal-open .fixed.inset-0.z-50 {
+  padding-bottom: calc(0.75rem + var(--kb, 0px)) !important;
+  transition: padding-bottom 150ms ease-out;
 }
 
 /* Tabular figures for aligned financial numbers */
