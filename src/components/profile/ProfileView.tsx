@@ -3,7 +3,7 @@ import { ChevronLeft, LogOut, Trash2 } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useTheme } from '@/app/providers/ThemeProvider';
 import { useSnackbar } from '@/app/providers/SnackbarProvider';
-import { Glass, Button } from 'glisse';
+import { Glass, Button, Input } from 'glisse';
 import { ThemePreviewPicker } from './ThemePreviewPicker';
 import { AppDialog } from '@/components/common/AppDialog';
 import { wipeAllUserData } from '@/data/sync/dataWipeService';
@@ -147,7 +147,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
                 setDeleteConfirmText('');
                 setIsDeleteDialogOpen(true);
               }}
-              className="!w-full !py-3 !rounded-xl font-bold !text-[var(--lg-foreground)] flex items-center justify-center gap-2 transition-all"
+              className="!w-full !py-3 !rounded-[24px] font-bold !text-[var(--lg-foreground)] flex items-center justify-center gap-2 transition-all"
               icon={<Trash2 className="w-4 h-4 text-[var(--lg-muted)]" />}
             >
               Delete All Data
@@ -163,7 +163,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
             <Button
               variant="glass"
               onClick={() => setIsSignOutDialogOpen(true)}
-              className="!w-full !py-3 !rounded-xl font-bold !text-red-600 dark:!text-red-400 !bg-red-500/15 hover:!bg-red-500/25 !border-red-500/25 flex items-center justify-center gap-2 transition-all"
+              className="!w-full !py-3 !rounded-[24px] font-bold !text-red-600 dark:!text-red-400 !bg-red-500/15 hover:!bg-red-500/25 !border-red-500/25 flex items-center justify-center gap-2 transition-all"
               icon={<LogOut className="w-4 h-4 text-red-600 dark:text-red-400" />}
             >
               Sign Out
@@ -221,15 +221,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
         disableConfirm={deleteConfirmText.trim().toUpperCase() !== 'DELETE'}
         disableCancelWhileLoading={true}
       >
-        <input
-          type="text"
-          value={deleteConfirmText}
-          onChange={(e) => setDeleteConfirmText(e.target.value)}
-          disabled={isDeletingData}
+        <Input
           placeholder="Type DELETE"
-          autoComplete="off"
-          spellCheck={false}
-          className="w-full px-3.5 py-2.5 rounded-xl text-base sm:text-sm font-semibold text-left tracking-wider bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/15 text-[var(--lg-foreground)] placeholder:text-[var(--lg-muted)]/60 focus:outline-none focus:border-red-500/60 focus:ring-2 focus:ring-red-500/35 transition-colors"
+          value={deleteConfirmText}
+          onValueChange={setDeleteConfirmText}
+          disabled={isDeletingData}
+          className="!max-w-none"
         />
       </AppDialog>
     </div>

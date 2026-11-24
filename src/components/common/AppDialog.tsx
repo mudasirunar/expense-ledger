@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
-import { Glass, Button } from 'glisse';
+import { Button } from 'glisse';
+import { ModalPortal } from '@/components/common/ModalPortal';
 
 export type AppDialogTone = 'default' | 'danger' | 'warning' | 'success';
 export type AppDialogAlign = 'left' | 'center' | 'right';
@@ -30,27 +30,23 @@ export interface AppDialogProps {
 
 const TONE_STYLES: Record<
   AppDialogTone,
-  { iconBox: string; confirmBtn: string }
+  { iconBox: string; tint: string }
 > = {
   default: {
     iconBox: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20',
-    confirmBtn:
-      '!text-blue-600 dark:!text-blue-400 !bg-blue-500/15 hover:!bg-blue-500/25 !border-blue-500/25',
+    tint: '#2563EB',
   },
   danger: {
     iconBox: 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20',
-    confirmBtn:
-      '!text-red-600 dark:!text-red-400 !bg-red-500/15 hover:!bg-red-500/25 !border-red-500/25',
+    tint: '#DC2626',
   },
   warning: {
     iconBox: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20',
-    confirmBtn:
-      '!text-amber-600 dark:!text-amber-400 !bg-amber-500/15 hover:!bg-amber-500/25 !border-amber-500/25',
+    tint: '#D97706',
   },
   success: {
     iconBox: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-    confirmBtn:
-      '!text-emerald-600 dark:!text-emerald-400 !bg-emerald-500/15 hover:!bg-emerald-500/25 !border-emerald-500/25',
+    tint: '#059669',
   },
 };
 
@@ -160,102 +156,104 @@ export const AppDialog: React.FC<AppDialogProps> = ({
 
   if (!isOpen) return null;
 
-  return createPortal(
-    <div
-      ref={overlayRef}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="app-dialog-title"
-      className="fixed inset-0 z-50 touch-none overscroll-none"
-    >
-      {/* Full-Screen Dimmed Blur Backdrop */}
+  return (
+    <ModalPortal isOpen={isOpen}>
       <div
-        className="fixed inset-0 bg-black/45 dark:bg-black/65 backdrop-blur-sm transition-opacity touch-none"
-        onClick={() => {
-          if (closeOnBackdrop && !isLoading) {
-            onClose();
-          }
-        }}
-      />
-
-      {/* Visual-Viewport-Aware Centering Frame (lifts dialog cleanly above mobile keyboard) */}
-      <div
-        className="fixed left-0 right-0 z-10 flex items-center justify-center p-4 pointer-events-none transition-[height,top] duration-150 ease-out"
-        style={
-          visualViewportBox
-            ? {
-                top: `${visualViewportBox.offsetTop}px`,
-                height: `${visualViewportBox.height}px`,
-              }
-            : {
-                top: 0,
-                bottom: 0,
-              }
-        }
+        ref={overlayRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="app-dialog-title"
+        className="fixed inset-0 z-50 touch-none overscroll-none animate-fade-in"
       >
-        {/* Glisse Liquid Glass Dialog Card */}
-        <Glass className="pointer-events-auto relative w-full max-w-[330px] sm:max-w-sm max-h-full overflow-y-auto overscroll-contain rounded-3xl p-5 shadow-2xl border border-white/30 dark:border-white/15 bg-[#ECE8E1]/95 dark:bg-[#131926]/95">
-          <div className="flex flex-col w-full">
-            {icon && (
-              <div
-                className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3.5 ${ALIGN_SELF[iconAlign]} ${styles.iconBox}`}
+        {/* Full-Screen Dimmed Blur Backdrop (matches all other app modals) */}
+        <div
+          className="fixed inset-0 bg-black/20 dark:bg-black/60 backdrop-blur-sm transition-opacity touch-none"
+          onClick={() => {
+            if (closeOnBackdrop && !isLoading) {
+              onClose();
+            }
+          }}
+        />
+
+        {/* Visual-Viewport-Aware Centering Frame (lifts dialog cleanly above mobile keyboard) */}
+        <div
+          className="fixed left-0 right-0 z-10 flex items-center justify-center p-3 sm:p-4 pointer-events-none transition-[height,top] duration-150 ease-out"
+          style={
+            visualViewportBox
+              ? {
+                  top: `${visualViewportBox.offsetTop}px`,
+                  height: `${visualViewportBox.height}px`,
+                }
+              : {
+                  top: 0,
+                  bottom: 0,
+                }
+          }
+        >
+          {/* Unified Modal Surface (matches QuickAdd / Projects / Contacts / Accounts modals) */}
+          <div className="pointer-events-auto relative w-full max-w-[340px] sm:max-w-sm max-h-full overflow-y-auto overscroll-contain rounded-3xl p-5 sm:p-6 shadow-2xl box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl">
+            <div className="flex flex-col w-full">
+              {icon && (
+                <div
+                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3.5 ${ALIGN_SELF[iconAlign]} ${styles.iconBox}`}
+                >
+                  {icon}
+                </div>
+              )}
+
+              <h2
+                id="app-dialog-title"
+                className={`w-full text-base font-extrabold text-[var(--lg-foreground)] tracking-tight ${TEXT_ALIGN[titleAlign]}`}
               >
-                {icon}
-              </div>
-            )}
+                {title}
+              </h2>
 
-            <h2
-              id="app-dialog-title"
-              className={`w-full text-base font-extrabold text-[var(--lg-foreground)] tracking-tight ${TEXT_ALIGN[titleAlign]}`}
-            >
-              {title}
-            </h2>
+              {description && (
+                <p className={`w-full mt-2 text-xs text-[var(--lg-muted)] leading-relaxed ${TEXT_ALIGN[descriptionAlign]}`}>
+                  {description}
+                </p>
+              )}
 
-            {description && (
-              <p className={`w-full mt-2 text-xs text-[var(--lg-muted)] leading-relaxed ${TEXT_ALIGN[descriptionAlign]}`}>
-                {description}
-              </p>
-            )}
+              {children && (
+                <div className="w-full mt-4 text-left">
+                  {children}
+                </div>
+              )}
+            </div>
 
-            {children && (
-              <div className="w-full mt-4 text-left">
-                {children}
-              </div>
-            )}
+            {/* Action Buttons (Unified Glisse style matching Add modals) */}
+            <div className="grid grid-cols-2 gap-2.5 mt-5">
+              <Button
+                variant="glass"
+                type="button"
+                onClick={onClose}
+                disabled={isCancelDisabled}
+                className={`!w-full !py-2.5 !rounded-[24px] font-semibold !text-sm flex items-center justify-center transition-all ${
+                  isCancelDisabled
+                    ? '!opacity-40 !cursor-not-allowed !pointer-events-none !text-[var(--lg-muted)]'
+                    : '!text-[var(--lg-foreground)]'
+                }`}
+              >
+                {cancelLabel}
+              </Button>
+
+              <Button
+                variant="filled"
+                tint={styles.tint}
+                type="button"
+                onClick={() => onConfirm()}
+                disabled={isConfirmDisabled}
+                className={`!w-full !py-2.5 !rounded-[24px] font-semibold !text-sm flex items-center justify-center gap-1.5 transition-all ${
+                  isConfirmDisabled ? '!opacity-55 !cursor-not-allowed !pointer-events-none' : ''
+                }`}
+                icon={isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+              >
+                {isLoading && confirmLoadingLabel ? confirmLoadingLabel : confirmLabel}
+              </Button>
+            </div>
           </div>
-
-          {/* Action Buttons */}
-          <div className="grid grid-cols-2 gap-2.5 mt-5">
-            <Button
-              variant="glass"
-              onClick={onClose}
-              disabled={isCancelDisabled}
-              className={`!w-full !py-2.5 !rounded-xl font-bold !text-sm flex items-center justify-center transition-all ${
-                isCancelDisabled
-                  ? '!opacity-40 !cursor-not-allowed !pointer-events-none !text-[var(--lg-muted)]'
-                  : '!text-[var(--lg-foreground)]'
-              }`}
-            >
-              {cancelLabel}
-            </Button>
-
-            <Button
-              variant="glass"
-              onClick={() => onConfirm()}
-              disabled={isConfirmDisabled}
-              className={`!w-full !py-2.5 !rounded-xl font-bold !text-sm flex items-center justify-center gap-1.5 transition-all ${
-                styles.confirmBtn
-              } ${
-                isConfirmDisabled ? '!opacity-75 !cursor-not-allowed !pointer-events-none' : ''
-              }`}
-              icon={isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
-            >
-              {isLoading && confirmLoadingLabel ? confirmLoadingLabel : confirmLabel}
-            </Button>
-          </div>
-        </Glass>
+        </div>
       </div>
-    </div>,
-    document.body
+    </ModalPortal>
   );
 };

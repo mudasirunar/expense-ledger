@@ -7,6 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { Glass, Button } from 'glisse';
 
 export type SnackbarTone = 'default' | 'success' | 'error' | 'warning';
 export type SnackbarPosition = 'bottom' | 'top';
@@ -41,22 +42,22 @@ const SnackbarContext = createContext<SnackbarContextType>({
 
 export const useSnackbar = () => useContext(SnackbarContext);
 
-const TONE_CLASSES: Record<SnackbarTone, { bar: string; action: string }> = {
+const TONE_CLASSES: Record<SnackbarTone, { bar: string; actionTint?: string }> = {
   default: {
-    bar: 'bg-slate-900/95 text-white border-white/10 dark:bg-slate-100/95 dark:text-slate-900 dark:border-black/10',
-    action: 'text-blue-400 hover:text-blue-300 dark:text-blue-600 dark:hover:text-blue-700',
+    bar: '!text-[var(--lg-foreground)]',
+    actionTint: '#2563EB',
   },
   success: {
-    bar: 'bg-emerald-950/95 text-emerald-50 border-emerald-500/25 dark:bg-emerald-900/95 dark:text-emerald-50 dark:border-emerald-400/25',
-    action: 'text-emerald-300 hover:text-emerald-200',
+    bar: '!bg-emerald-500/15 dark:!bg-emerald-500/20 !border-emerald-500/30 !text-emerald-950 dark:!text-emerald-100',
+    actionTint: '#059669',
   },
   error: {
-    bar: 'bg-red-950/95 text-red-50 border-red-500/25 dark:bg-red-900/95 dark:text-red-50 dark:border-red-400/25',
-    action: 'text-red-300 hover:text-red-200',
+    bar: '!bg-red-500/15 dark:!bg-red-500/20 !border-red-500/30 !text-red-950 dark:!text-red-100',
+    actionTint: '#DC2626',
   },
   warning: {
-    bar: 'bg-amber-950/95 text-amber-50 border-amber-500/25 dark:bg-amber-900/95 dark:text-amber-50 dark:border-amber-400/25',
-    action: 'text-amber-300 hover:text-amber-200',
+    bar: '!bg-amber-500/15 dark:!bg-amber-500/20 !border-amber-500/30 !text-amber-950 dark:!text-amber-100',
+    actionTint: '#D97706',
   },
 };
 
@@ -139,26 +140,28 @@ export const SnackbarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               paddingTop: isTop ? 'env(safe-area-inset-top, 0px)' : undefined,
             }}
           >
-            <div
-              className={`pointer-events-auto max-w-md w-full sm:w-auto sm:min-w-[260px] px-4 py-3 rounded-2xl border shadow-xl backdrop-blur-md flex items-center justify-between gap-4 ${toneStyle.bar}`}
+            <Glass
+              className={`pointer-events-auto max-w-md w-full sm:w-auto sm:min-w-[260px] px-4 py-3 !rounded-xl shadow-xl flex items-center justify-between gap-4 ${toneStyle.bar}`}
             >
-              <span className="text-sm font-medium leading-snug">
+              <span className="text-sm font-semibold leading-snug">
                 {snackbar.message}
               </span>
 
               {snackbar.action && (
-                <button
+                <Button
+                  variant="glass"
+                  tint={toneStyle.actionTint}
                   type="button"
                   onClick={() => {
                     snackbar.action?.onClick();
                     dismissSnackbar();
                   }}
-                  className={`text-sm font-bold tracking-tight flex-shrink-0 transition-colors ${toneStyle.action}`}
+                  className="!px-3 !py-1 !rounded-full !text-xs font-bold flex-shrink-0"
                 >
                   {snackbar.action.label}
-                </button>
+                </Button>
               )}
-            </div>
+            </Glass>
           </div>,
           document.body
         )}

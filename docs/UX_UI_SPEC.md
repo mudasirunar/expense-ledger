@@ -12,9 +12,9 @@ The interface strictly adopts Apple's **Liquid Glass** aesthetic via the **Gliss
 * **Glisse for Interactive Controls & Floating Chrome:** All primary interactive controls and floating surfaces utilize Glisse components (`glisse`):
   * **Bottom Navigation Bar:** Floating translucent glass dock hovering over scrollable content with real-time backdrop blur.
   * **Top App Bar:** Clean header aligned with the canvas background and Glisse glass action buttons.
-  * **Interactive Controls:** Glisse buttons, switches, sliders, segmented controls, and dropdowns.
+  * **Interactive Controls:** Unified Glisse `<Button>` (`variant="glass"` for neutral/cancel actions, `variant="filled"` with semantic `tint` for primary/destructive confirms, `24px` pill roundedness; `rounded-full` for circular icon buttons), switches, sliders, segmented controls, and dropdowns.
   * **Selective Data Cards (When Needed):** Translucent glass container cards with specular border highlights, used sparingly.
-  * **Forms & Text Inputs:** Glass-backed input fields with high-contrast text and subtle refractive focus rings.
+  * **Forms & Text Inputs:** Unified Glisse `<Input>` fields (`className="!max-w-none"`) across all screens and dialogs for consistent Liquid Glass styling, roundedness, and focus behavior.
   * **Modals & Drawers:** Frosted bottom sheets with layered background blur.
 
 ### 1.2 Color Palette & Semantic Tokens
