@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useTheme } from '@/app/providers/ThemeProvider';
 import { useSnackbar } from '@/app/providers/SnackbarProvider';
+import { useSync } from '@/app/providers/SyncProvider';
 import { Glass, Button, Input } from 'glisse';
 import { ThemePreviewPicker } from './ThemePreviewPicker';
 import { AppDialog } from '@/components/common/AppDialog';
@@ -43,7 +44,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
   const { user, signOutUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const { showSnackbar } = useSnackbar();
+  const { isOnline, pendingWritesCount } = useSync();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const statusRingClass = !isOnline
+    ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-[#E2DDD5] dark:ring-offset-background shadow-[0_0_12px_rgba(239,68,68,0.55)] dark:shadow-[0_0_14px_rgba(239,68,68,0.7)]'
+    : pendingWritesCount > 0
+      ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-[#E2DDD5] dark:ring-offset-background shadow-[0_0_12px_rgba(251,191,36,0.6)] dark:shadow-[0_0_14px_rgba(251,191,36,0.75)] animate-pulse'
+      : 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-[#E2DDD5] dark:ring-offset-background shadow-[0_0_12px_rgba(16,185,129,0.5)] dark:shadow-[0_0_14px_rgba(16,185,129,0.65)]';
+
+  const statusLabel = !isOnline
+    ? 'Offline'
+    : pendingWritesCount > 0
+      ? `Syncing (${pendingWritesCount})`
+      : 'Synced';
 
   const [isSignOutDialogOpen, setIsSignOutDialogOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -239,19 +253,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
         <main className="max-w-md sm:max-w-lg mx-auto w-full px-4 pt-4 pb-10 space-y-6">
           {/* Profile Identity (Flat on screen, no card) */}
           <section className="flex items-center gap-4">
-            <div className="flex-shrink-0">
+            <div
+              className={`flex-shrink-0 w-16 h-16 rounded-full overflow-hidden transition-all ${statusRingClass}`}
+              title={statusLabel}
+            >
               {photoURL ? (
                 <img
                   src={photoURL}
                   alt={displayName}
                   referrerPolicy="no-referrer"
-                  className="w-16 h-16 rounded-full object-cover shadow-md border border-white/50 dark:border-white/15"
+                  className="w-full h-full object-cover"
                   onError={(e) => {
                     (e.target as HTMLElement).style.display = 'none';
                   }}
                 />
               ) : (
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-black text-2xl flex items-center justify-center shadow-md">
+                <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-black text-2xl flex items-center justify-center">
                   {initial}
                 </div>
               )}
@@ -346,8 +363,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
                 setDeleteConfirmText('');
                 setIsDeleteDialogOpen(true);
               }}
-              className="!w-full !py-3 !rounded-[24px] font-bold !text-[var(--lg-foreground)] flex items-center justify-center gap-2 transition-all"
-              icon={<Trash2 className="w-4 h-4 text-[var(--lg-muted)]" />}
+              className="!w-full !py-3 !rounded-[24px] font-bold !text-red-600 dark:!text-red-400 !bg-red-500/15 hover:!bg-red-500/25 !border-red-500/25 flex items-center justify-center gap-2 transition-all"
+              icon={<Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />}
             >
               Delete All Data
             </Button>
@@ -401,7 +418,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
         titleAlign="center"
         description={
           pendingRestore ? (
-            pendingRestore.plan.operations.length === 0 ? (
+            pendingRestore.plan.totalInBackup === 0 ? (
+              <>
+                <span className="font-semibold">{pendingRestore.filename}</span> is empty. There is nothing to import.
+              </>
+            ) : pendingRestore.plan.operations.length === 0 ? (
               <>
                 All <span className="font-semibold">{pendingRestore.plan.totalInBackup}</span> items in{' '}
                 <span className="font-semibold">{pendingRestore.filename}</span> already exist or are up to date. Nothing new to import.
@@ -459,33 +480,40 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
               </div>
             </div>
 
-            {/* Per-Collection Breakdown */}
-            <div className="space-y-1 text-xs px-3 py-2.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10">
-              {(Object.keys(COLLECTION_LABELS) as UserCollectionName[])
-                .filter((col) => {
+            {/* Per-Collection Breakdown (only rendered when backup has items) */}
+            {(() => {
+              const nonEmptyCols = (Object.keys(COLLECTION_LABELS) as UserCollectionName[]).filter(
+                (col) => {
                   const s = pendingRestore.plan.byCollection[col];
                   return s.toImport + s.toUpdate + s.skipped > 0;
-                })
-                .map((col) => {
-                  const s = pendingRestore.plan.byCollection[col];
-                  const incoming = s.toImport + s.toUpdate;
-                  return (
-                    <div key={col} className="flex items-center justify-between py-0.5">
-                      <span className="text-[var(--lg-muted)] font-medium">
-                        {COLLECTION_LABELS[col]}
-                      </span>
-                      <span className="font-semibold text-[var(--lg-foreground)]">
-                        {incoming > 0 ? `+${incoming}` : '0'}
-                        {s.skipped > 0 && (
-                          <span className="text-[var(--lg-muted)] font-normal ml-1.5">
-                            ({s.skipped} skipped)
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
-            </div>
+                }
+              );
+              if (nonEmptyCols.length === 0) return null;
+
+              return (
+                <div className="space-y-1 text-xs px-3 py-2.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10">
+                  {nonEmptyCols.map((col) => {
+                    const s = pendingRestore.plan.byCollection[col];
+                    const incoming = s.toImport + s.toUpdate;
+                    return (
+                      <div key={col} className="flex items-center justify-between py-0.5">
+                        <span className="text-[var(--lg-muted)] font-medium">
+                          {COLLECTION_LABELS[col]}
+                        </span>
+                        <span className="font-semibold text-[var(--lg-foreground)]">
+                          {incoming > 0 ? `+${incoming}` : '0'}
+                          {s.skipped > 0 && (
+                            <span className="text-[var(--lg-muted)] font-normal ml-1.5">
+                              ({s.skipped} skipped)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
       </AppDialog>
