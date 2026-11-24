@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock Firestore SDK before importing dataWipeService
+const mockBatchSet = vi.fn();
 const mockBatchDelete = vi.fn();
 const mockBatchCommit = vi.fn().mockResolvedValue(undefined);
 const mockWriteBatch = vi.fn(() => ({
+  set: mockBatchSet,
   delete: mockBatchDelete,
   commit: mockBatchCommit,
 }));
@@ -152,8 +154,8 @@ describe('Delete-Wins Tombstone & Local/Remote Data Wipe Service', () => {
     expect(getLocalWipedAt(userId)).toBe(result.wipedAt);
     expect(getPendingCloudWipe(userId)).toBeNull();
 
-    // 2. Remote meta/syncState written with monotonic wipedAt
-    expect(mockSetDoc).toHaveBeenCalledWith(
+    // 2. Remote meta/syncState written atomically inside the combined writeBatch
+    expect(mockBatchSet).toHaveBeenCalledWith(
       { path: `users/${userId}/meta/syncState` },
       { wipedAt: result.wipedAt, updatedAt: result.wipedAt },
       { merge: true }
