@@ -6,9 +6,13 @@ import { registerSW } from 'virtual:pwa-register';
 
 // Register Service Worker with safe update lifecycle
 if ('serviceWorker' in navigator) {
-  registerSW({
+  const updateSW = registerSW({
     onNeedRefresh() {
-      console.log('[PWA] New version available. Refresh required.');
+      window.dispatchEvent(
+        new CustomEvent('pwa:need-refresh', {
+          detail: { updateSW },
+        })
+      );
     },
     onOfflineReady() {
       console.log('[PWA] App shell cached. Ready for offline use.');
