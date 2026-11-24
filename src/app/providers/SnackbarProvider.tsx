@@ -126,8 +126,8 @@ export const SnackbarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           <div
             role="status"
             aria-live="polite"
-            className={`fixed left-0 right-0 z-[60] flex justify-center px-4 pointer-events-none transition-all duration-200 ease-out ${
-              isTop ? 'top-4' : 'bottom-6'
+            className={`fixed left-0 right-0 z-[60] flex justify-center px-4 pointer-events-none transition-[bottom,opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              isTop ? 'top-4' : ''
             } ${
               snackbar.visible
                 ? 'opacity-100 translate-y-0'
@@ -136,7 +136,12 @@ export const SnackbarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                   : 'opacity-0 translate-y-2'
             }`}
             style={{
-              paddingBottom: isTop ? undefined : 'env(safe-area-inset-bottom, 0px)',
+              // Bottom snackbars sit just above the bottom nav when one is mounted (it publishes
+              // --snackbar-bottom) and fall back to the natural bottom position otherwise.
+              // Changes animate smoothly via the `bottom` transition.
+              bottom: isTop
+                ? undefined
+                : 'var(--snackbar-bottom, max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem)))',
               paddingTop: isTop ? 'env(safe-area-inset-top, 0px)' : undefined,
             }}
           >

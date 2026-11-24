@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { LayoutDashboard, Building2, Plus, User, Wallet } from 'lucide-react';
 import { TabBar, Button } from 'glisse';
 import { useSync } from '@/app/providers/SyncProvider';
@@ -19,6 +19,28 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 }) => {
   const { isOnline, pendingWritesCount } = useSync();
   const { user } = useAuth();
+  const navRef = useRef<HTMLElement>(null);
+
+  // Publish where the nav's top edge is so bottom snackbars sit just above it while the nav is
+  // mounted. Removing it on unmount lets snackbars slide back to their natural bottom position.
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const root = document.documentElement;
+    const publish = () => {
+      const bottom = parseFloat(getComputedStyle(nav).bottom) || 0;
+      root.style.setProperty('--snackbar-bottom', `${Math.round(bottom + nav.offsetHeight + 8)}px`);
+    };
+    publish();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publish) : null;
+    observer?.observe(nav);
+    window.addEventListener('resize', publish);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', publish);
+      root.style.removeProperty('--snackbar-bottom');
+    };
+  }, []);
   const statusLabel = !isOnline
     ? 'Offline'
     : pendingWritesCount > 0
@@ -75,6 +97,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 
   return (
     <nav
+      ref={navRef}
       aria-label="Bottom Navigation"
       className="fixed left-0 right-0 z-40 pointer-events-none flex justify-center px-4"
       style={{
