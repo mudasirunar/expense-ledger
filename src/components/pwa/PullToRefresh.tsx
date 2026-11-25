@@ -5,13 +5,20 @@ import { useSync } from '@/app/providers/SyncProvider';
 interface PullToRefreshProps {
   children: React.ReactNode;
   onRefresh?: () => Promise<void>;
+  scrollContainerRef?: React.MutableRefObject<HTMLDivElement | null>;
+  autoRefreshRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 const PULL_THRESHOLD = 64; // px needed to engage refresh trigger
 const MAX_PULL = 96; // max travel distance with elastic rubber-band damping
 const REFRESH_HEIGHT = 72; // px height held while actively refreshing
 
-export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefresh }) => {
+export const PullToRefresh: React.FC<PullToRefreshProps> = ({
+  children,
+  onRefresh,
+  scrollContainerRef,
+  autoRefreshRef,
+}) => {
   const { triggerManualRefresh, isRefreshing } = useSync();
   const [pullDistance, setPullDistanceState] = useState<number>(0);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -42,6 +49,7 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
   const [pullStatus, setPullStatus] = useState<'idle' | 'pulling' | 'threshold' | 'refreshing' | 'complete'>('idle');
   // Keeps the green check visible while the indicator slides back up after a finished refresh
   const [closingComplete, setClosingComplete] = useState<boolean>(false);
+  const [isAutoPull, setIsAutoPull] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const startYRef = useRef<number>(0);
@@ -49,7 +57,16 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
   const isDraggingRef = useRef<boolean>(false);
   const pullDistanceRef = useRef<number>(0);
   const pullStatusRef = useRef<'idle' | 'pulling' | 'threshold' | 'refreshing' | 'complete'>('idle');
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const setContainerNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node;
+      if (scrollContainerRef) {
+        scrollContainerRef.current = node;
+      }
+    },
+    [scrollContainerRef]
+  );
 
   pullStatusRef.current = pullStatus;
 
@@ -192,6 +209,49 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
     };
   }, [handleRefresh, isRefreshing]);
 
+  const autoPullTimerRef = useRef<number | null>(null);
+
+  const triggerAutoPullRefresh = useCallback(() => {
+    if (isRefreshing || pullStatusRef.current !== 'idle' || isDraggingRef.current) return;
+    if (document.querySelector('.fixed.z-50')) return;
+
+    if (autoPullTimerRef.current !== null) {
+      window.clearTimeout(autoPullTimerRef.current);
+    }
+
+    // Phase 1: Smoothly glide down showing the pull-down arrow indicator (no pull/release prompt text)
+    setIsAutoPull(true);
+    setPullStatus('pulling');
+    setPullDistance(PULL_THRESHOLD);
+    pullDistanceRef.current = PULL_THRESHOLD;
+
+    // Phase 2: Transition into the loading spinner -> green tick -> smooth close
+    autoPullTimerRef.current = window.setTimeout(() => {
+      autoPullTimerRef.current = null;
+      setIsAutoPull(false);
+      handleRefresh();
+    }, 240);
+  }, [handleRefresh, isRefreshing, setPullDistance]);
+
+  useEffect(() => {
+    if (autoRefreshRef) {
+      autoRefreshRef.current = triggerAutoPullRefresh;
+    }
+    return () => {
+      if (autoRefreshRef) {
+        autoRefreshRef.current = null;
+      }
+    };
+  }, [autoRefreshRef, triggerAutoPullRefresh]);
+
+  useEffect(() => {
+    return () => {
+      if (autoPullTimerRef.current !== null) {
+        window.clearTimeout(autoPullTimerRef.current);
+      }
+    };
+  }, []);
+
   // Synchronize when external refresh is triggered (e.g. from top header sync button)
   useEffect(() => {
     if (isRefreshing && pullStatus !== 'refreshing') {
@@ -216,7 +276,7 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
 
   return (
     <div 
-      ref={containerRef}
+      ref={setContainerNode}
       className="relative flex-1 w-full overflow-y-auto scroll-container overscroll-y-contain select-none"
     >
       {/* Status-bar safe area (scrolls away with the content, never covered by the indicator) */}
@@ -276,14 +336,19 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
               />
             )}
           </div>
-          <span className="h-[13px] text-[11px] font-semibold text-[var(--lg-muted)] leading-[13px] transition-opacity duration-200" style={{ opacity: pullDistance >= 56 ? 1 : 0 }}>
+          <span
+            className="h-[13px] text-[11px] font-semibold text-[var(--lg-muted)] leading-[13px] transition-opacity duration-200"
+            style={{ opacity: pullDistance >= 56 && (!isAutoPull || isBusy || showComplete) ? 1 : 0 }}
+          >
               {pullStatus === 'refreshing'
                 ? 'Updating…'
                 : showComplete
                   ? 'Updated'
-                  : pullStatus === 'threshold'
-                    ? 'Release to refresh'
-                    : 'Pull to refresh'}
+                  : isAutoPull
+                    ? ''
+                    : pullStatus === 'threshold'
+                      ? 'Release to refresh'
+                      : 'Pull to refresh'}
             </span>
         </div>
       </div>
