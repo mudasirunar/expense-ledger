@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -83,10 +84,26 @@ export class FirestoreObligationRepository implements IObligationRepository {
 
   async update(userId: string, id: string, partial: Partial<Obligation>): Promise<void> {
     const docRef = doc(db, 'users', userId, 'obligations', id);
-    await updateDoc(docRef, {
+    const payload: Record<string, unknown> = {
       ...sanitizeUpdatePayload(partial),
       updatedAt: new Date().toISOString(),
-    });
+    };
+
+    // Explicitly clear optional fields when set to undefined (never touch tombstone fields)
+    const clearableKeys: Array<keyof Obligation> = [
+      'projectId',
+      'contactId',
+      'notes',
+      'materialDetails',
+    ];
+    for (const key of clearableKeys) {
+      if (Object.prototype.hasOwnProperty.call(partial, key) && partial[key] === undefined) {
+        payload[key] = deleteField();
+      }
+    }
+
+    // Last-Write-Wins merge commit (works cleanly across offline/online remote sync)
+    await setDoc(docRef, payload, { merge: true });
   }
 
   async void(userId: string, id: string): Promise<void> {

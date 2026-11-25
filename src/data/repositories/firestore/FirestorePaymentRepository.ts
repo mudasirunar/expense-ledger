@@ -137,4 +137,25 @@ export class FirestorePaymentRepository implements IPaymentRepository {
       .map((d) => d.data() as Allocation)
       .filter((item) => isRecordActive(userId, item));
   }
+
+  subscribeAllocations(
+    userId: string,
+    onUpdate: (allocations: Allocation[]) => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    const q = query(this.getUserAllocationsCollection(userId));
+    return onSnapshot(
+      q,
+      (snap) => {
+        onUpdate(
+          snap.docs
+            .map((d) => d.data() as Allocation)
+            .filter((item) => isRecordActive(userId, item))
+        );
+      },
+      (err) => {
+        if (onError) onError(err);
+      }
+    );
+  }
 }

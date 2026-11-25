@@ -79,7 +79,7 @@
 - [x] Build Financial Reports standalone screen (`#/reports`: P&L, Cash Flow, Project Cost Comparisons + 3-sheet period Excel export, accessible from Profile).
 - [x] Build styled Multi-Sheet Excel Export (`.xlsx`: Summary, Expenses & Income, Transfers, Bills, Payments) + RFC-4180 CSV builder (`backupRestoreService.ts`).
 - [x] Build JSON backup export and validated Smart-Merge restore preview (`backupRestoreService.ts`).
-- [ ] Wire Bill Settlement UI (`Pay Bill` in History sheet & `Apply to Open Bill` in Quick Add Payment tab using `AllocationEngine`).
+- [x] Wire Bill Settlement UI (standalone `#/bills` Bills & Payables screen from Dashboard, `Pay Bill` & `Edit Bill` modals in `ActivityDetailSheet`, and `Apply to Open Bill` with locked bill-owned fields in Quick Add Payment tab using `AllocationEngine`).
 
 ### Phase 6: Offline Hardening & Deployment
 - [ ] Verify offline persistence in airplane mode.

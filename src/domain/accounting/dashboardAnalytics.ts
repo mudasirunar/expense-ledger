@@ -87,6 +87,8 @@ export interface ActivityFeedItem {
   amountMinor: number;
   direction: 'in' | 'out' | 'neutral';
   badge: string;
+  badgeTone?: 'positive' | 'warning' | 'neutral';
+  isBillPayment?: boolean;
 }
 
 export interface DashboardAnalytics {
@@ -97,6 +99,9 @@ export interface DashboardAnalytics {
   savingsRatePct: number | null;
   totalPayableMinor: number;
   openPayableCount: number;
+  totalPaidPayableMinor: number;
+  paidPayableCount: number;
+  partialPayableCount: number;
   totalReceivableMinor: number;
   openReceivableCount: number;
   unallocatedAdvancesMinor: number;
@@ -297,6 +302,9 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
   // receivable obligations are tracked under Receivables (inflow recognized via income/receipts).
   let totalPayableMinor = 0;
   let openPayableCount = 0;
+  let totalPaidPayableMinor = 0;
+  let paidPayableCount = 0;
+  let partialPayableCount = 0;
   let totalReceivableMinor = 0;
   let openReceivableCount = 0;
 
@@ -305,10 +313,15 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
     if (!matchesProjectEntityScope(ob.projectId, scopeFilter)) continue;
 
     const remaining = ob.remainingAmountMinor || 0;
+    const allocated = ob.allocatedAmountMinor || 0;
     if (ob.direction === 'payable') {
+      totalPaidPayableMinor += allocated;
       if (remaining > 0 && ob.status !== 'paid') {
         totalPayableMinor += remaining;
         openPayableCount += 1;
+        if (allocated > 0) partialPayableCount += 1;
+      } else if (ob.status === 'paid' || remaining <= 0) {
+        paidPayableCount += 1;
       }
       const dateKey = normalizeDateKey(ob.date);
       if (matchesTimeHorizon(dateKey, timeHorizon, now)) {
@@ -325,11 +338,12 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
     }
   }
 
-  // Unallocated advances (prepayments to suppliers/contractors)
+  // Unallocated advances (standalone prepayments only — discard any legacy overpayment on bill payments)
   let unallocatedAdvancesMinor = 0;
   for (const pay of payments) {
     if (pay.status === 'voided') continue;
     if (pay.direction !== 'outgoing') continue;
+    if (pay.linkedBillId || (pay.allocatedAmountMinor || 0) > 0) continue;
     if (!matchesProjectEntityScope(pay.projectId, scopeFilter)) continue;
     unallocatedAdvancesMinor += pay.unallocatedAmountMinor || 0;
   }
@@ -435,6 +449,9 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
     savingsRatePct,
     totalPayableMinor,
     openPayableCount,
+    totalPaidPayableMinor,
+    paidPayableCount,
+    partialPayableCount,
     totalReceivableMinor,
     openReceivableCount,
     unallocatedAdvancesMinor,
@@ -518,6 +535,11 @@ export function buildActivityFeed(input: ActivityFeedInput): ActivityFeedItem[] 
     });
   }
 
+  const obligationMap = new Map<string, Obligation>();
+  for (const o of obligations) {
+    obligationMap.set(o.id, o);
+  }
+
   for (const ob of obligations) {
     if (ob.status === 'voided') continue;
     if (!matchesProjectEntityScope(ob.projectId, scopeFilter)) continue;
@@ -531,12 +553,13 @@ export function buildActivityFeed(input: ActivityFeedInput): ActivityFeedItem[] 
       id: `ob-${ob.id}`,
       kind: 'obligation',
       title: ob.title || typeLabel,
-      subtitle: [typeLabel, projName].filter(Boolean).join(' • '),
+      subtitle: [typeLabel, projName || 'Personal'].filter(Boolean).join(' • '),
       date: dateKey,
       sortKey: `${dateKey}T${ob.createdAt || ''}`,
       amountMinor: ob.totalAmountMinor || 0,
       direction: ob.direction === 'receivable' ? 'in' : 'out',
-      badge: ob.status === 'paid' ? 'Paid' : ob.status === 'partially_paid' ? 'Partial' : 'Unpaid',
+      badge: 'Bill Logged',
+      badgeTone: 'neutral',
     });
   }
 
@@ -549,17 +572,46 @@ export function buildActivityFeed(input: ActivityFeedInput): ActivityFeedItem[] 
     const accName = accountNameMap.get(pay.accountId) || 'Account';
     const projName = pay.projectId ? projectNameMap.get(pay.projectId) : undefined;
     const isIncoming = pay.direction === 'incoming';
+    const isBillPayment = Boolean(pay.linkedBillId || (pay.allocatedAmountMinor || 0) > 0);
+    const linkedBill = pay.linkedBillId ? obligationMap.get(pay.linkedBillId) : undefined;
+    const billTitle = pay.linkedBillTitle || linkedBill?.title;
+
+    let badge: string;
+    let badgeTone: ActivityFeedItem['badgeTone'] = 'neutral';
+    if (isBillPayment) {
+      const outcome =
+        pay.billSettlementStatus ||
+        (linkedBill ? (linkedBill.status === 'paid' ? 'paid' : 'partially_paid') : 'paid');
+      if (outcome === 'partially_paid') {
+        badge = 'Partial Paid';
+        badgeTone = 'warning';
+      } else {
+        badge = 'Bill Paid';
+        badgeTone = 'positive';
+      }
+    } else {
+      badge = pay.unallocatedAmountMinor > 0 ? 'Advance' : 'Payment';
+    }
+
+    const displayAmountMinor =
+      isBillPayment && (pay.allocatedAmountMinor || 0) > 0
+        ? pay.allocatedAmountMinor
+        : pay.amountMinor || 0;
 
     feed.push({
       id: `pay-${pay.id}`,
       kind: 'payment',
-      title: pay.notes?.trim() || (isIncoming ? 'Client Receipt' : 'Bill Settlement'),
-      subtitle: [accName, projName].filter(Boolean).join(' • '),
+      title: isBillPayment
+        ? billTitle || pay.notes?.trim() || 'Bill Payment'
+        : pay.notes?.trim() || (isIncoming ? 'Client Receipt' : 'Payment'),
+      subtitle: [accName, projName || 'Personal'].filter(Boolean).join(' • '),
       date: dateKey,
       sortKey: `${dateKey}T${pay.createdAt || ''}`,
-      amountMinor: pay.amountMinor || 0,
+      amountMinor: displayAmountMinor,
       direction: isIncoming ? 'in' : 'out',
-      badge: pay.unallocatedAmountMinor > 0 ? 'Advance' : 'Settlement',
+      badge,
+      badgeTone,
+      isBillPayment,
     });
   }
 

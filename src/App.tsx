@@ -13,6 +13,7 @@ import { ProfileView } from '@/components/profile/ProfileView';
 import { HistoryView } from '@/components/history/HistoryView';
 import { FinancialReportsView } from '@/components/reports/FinancialReportsView';
 import { SearchView } from '@/components/search/SearchView';
+import { BillsFilter, BillsView } from '@/components/bills/BillsView';
 
 const VALID_TABS: NavTab[] = ['dashboard', 'projects', 'accounts', 'profile'];
 const LAST_TAB_STORAGE_KEY = 'ledger_last_tab';
@@ -21,16 +22,22 @@ type AppRoute =
   | { screen: 'tabs'; tab: NavTab }
   | { screen: 'history' }
   | { screen: 'reports' }
-  | { screen: 'search' };
+  | { screen: 'search' }
+  | { screen: 'bills'; billId?: string };
 
 // Every screen has its own hash route so reloads and back/forward stay on the same screen.
 // Legacy '#/contacts' now lives on the Overview screen.
 function parseHashRoute(): AppRoute | null {
   if (typeof window === 'undefined') return null;
-  const raw = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+  const rawOriginal = window.location.hash.replace(/^#\/?/, '');
+  const raw = rawOriginal.toLowerCase();
   if (raw === 'history') return { screen: 'history' };
   if (raw === 'reports') return { screen: 'reports' };
-  if (raw === 'search') return { screen: 'search' };
+  if (raw === 'search' || raw.startsWith('search/')) return { screen: 'search' };
+  if (raw === 'bills') return { screen: 'bills' };
+  if (raw.startsWith('bills/') && rawOriginal.length > 6) {
+    return { screen: 'bills', billId: decodeURIComponent(rawOriginal.slice(6)) };
+  }
   if (raw === 'contacts') return { screen: 'tabs', tab: 'dashboard' };
   if (VALID_TABS.includes(raw as NavTab)) return { screen: 'tabs', tab: raw as NavTab };
   return null;
@@ -66,13 +73,18 @@ export const AppContent: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>(() =>
     initialRoute?.screen === 'tabs' ? initialRoute.tab : getSavedTab()
   );
-  const [standaloneScreen, setStandaloneScreen] = useState<'history' | 'reports' | 'search' | null>(() => {
+  const [standaloneScreen, setStandaloneScreen] = useState<'history' | 'reports' | 'search' | 'bills' | null>(() => {
     if (initialRoute?.screen === 'history') return 'history';
     if (initialRoute?.screen === 'reports') return 'reports';
     if (initialRoute?.screen === 'search') return 'search';
+    if (initialRoute?.screen === 'bills') return 'bills';
     return null;
   });
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
+  const [billsInitialFilter, setBillsInitialFilter] = useState<BillsFilter>('open');
+  const [selectedBillId, setSelectedBillId] = useState<string | null>(() =>
+    initialRoute?.screen === 'bills' ? initialRoute.billId ?? null : null
+  );
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
   // Make sure the URL always reflects the current screen (also normalizes empty / legacy hashes)
@@ -84,14 +96,24 @@ export const AppContent: React.FC = () => {
           ? '#/reports'
           : standaloneScreen === 'search'
             ? '#/search'
-            : `#/${currentTab}`;
+            : standaloneScreen === 'bills'
+              ? selectedBillId
+                ? `#/bills/${encodeURIComponent(selectedBillId)}`
+                : '#/bills'
+              : `#/${currentTab}`;
+    if (
+      standaloneScreen === 'search' &&
+      window.location.hash.toLowerCase().startsWith('#/search/')
+    ) {
+      return;
+    }
     if (window.location.hash !== targetHash) {
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${targetHash}`);
     }
     if (!standaloneScreen) {
       persistTab(currentTab);
     }
-  }, [currentTab, standaloneScreen]);
+  }, [currentTab, standaloneScreen, selectedBillId]);
 
   // Sync with browser hash navigation (supports native back/forward)
   useEffect(() => {
@@ -99,12 +121,19 @@ export const AppContent: React.FC = () => {
       const route = parseHashRoute();
       if (!route) return;
       if (route.screen === 'history') {
+        setSelectedBillId(null);
         setStandaloneScreen('history');
       } else if (route.screen === 'reports') {
+        setSelectedBillId(null);
         setStandaloneScreen('reports');
       } else if (route.screen === 'search') {
+        setSelectedBillId(null);
         setStandaloneScreen('search');
+      } else if (route.screen === 'bills') {
+        setStandaloneScreen('bills');
+        setSelectedBillId(route.billId ?? null);
       } else {
+        setSelectedBillId(null);
         setStandaloneScreen(null);
         setCurrentTab(route.tab);
       }
@@ -148,6 +177,31 @@ export const AppContent: React.FC = () => {
     }
   };
 
+  const handleOpenBills = (initialFilter: BillsFilter = 'open') => {
+    persistTab(currentTab);
+    setBillsInitialFilter(initialFilter);
+    setSelectedBillId(null);
+    setStandaloneScreen('bills');
+    if (window.location.hash !== '#/bills') {
+      window.location.hash = '#/bills';
+    }
+  };
+
+  const handleSelectBill = (billId: string) => {
+    setSelectedBillId(billId);
+    const targetHash = `#/bills/${encodeURIComponent(billId)}`;
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash;
+    }
+  };
+
+  const handleCloseBillDetail = () => {
+    setSelectedBillId(null);
+    if (window.location.hash !== '#/bills') {
+      window.location.hash = '#/bills';
+    }
+  };
+
   const handleBackFromStandalone = () => {
     const returnTab = currentTab || getSavedTab();
     setStandaloneScreen(null);
@@ -169,6 +223,18 @@ export const AppContent: React.FC = () => {
     return <SearchView onBack={handleBackFromStandalone} />;
   }
 
+  if (standaloneScreen === 'bills') {
+    return (
+      <BillsView
+        onBack={handleBackFromStandalone}
+        initialFilter={billsInitialFilter}
+        selectedBillId={selectedBillId}
+        onSelectBill={handleSelectBill}
+        onCloseBillDetail={handleCloseBillDetail}
+      />
+    );
+  }
+
   return (
     <>
       <MobileAppLayout
@@ -183,6 +249,7 @@ export const AppContent: React.FC = () => {
             onRefreshKey={refreshKey}
             onNavigateTab={(tab) => handleTabChange(tab)}
             onOpenHistory={handleOpenHistory}
+            onOpenBills={handleOpenBills}
           />
         )}
         {currentTab === 'projects' && <ProjectsView />}

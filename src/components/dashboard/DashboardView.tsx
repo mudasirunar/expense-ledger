@@ -4,6 +4,7 @@ import {
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
+  CheckCircle2,
   ChevronRight,
   FileText,
   Landmark,
@@ -13,6 +14,7 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react';
+import { BillsFilter } from '@/components/bills/BillsView';
 import { Glass, SegmentedControl } from 'glisse';
 import { useAuth } from '@/app/providers/AuthProvider';
 import {
@@ -601,12 +603,14 @@ interface DashboardViewProps {
   onRefreshKey: number;
   onNavigateTab?: (tab: 'projects' | 'accounts') => void;
   onOpenHistory?: () => void;
+  onOpenBills?: (filter?: BillsFilter) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   onRefreshKey,
   onNavigateTab,
   onOpenHistory,
+  onOpenBills,
 }) => {
   const { user } = useAuth();
   const userId = user?.uid || 'guest-user';
@@ -1073,16 +1077,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         />
       </section>
 
-      {/* Payables & Receivables Standing (Flat-on-Screen) */}
+      {/* Bills & Payables Standing (Flat-on-Screen) */}
       <section className="pb-5 border-b border-[var(--lg-separator)] space-y-3">
-        <h2 className="text-xs font-bold tracking-wider text-[var(--lg-muted)] uppercase">
-          Payables &amp; Receivables
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-bold tracking-wider text-[var(--lg-muted)] uppercase">
+            Bills &amp; Payables
+          </h2>
+          {onOpenBills && (
+            <button
+              type="button"
+              onClick={() => onOpenBills('open')}
+              className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-0.5"
+            >
+              Bills <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 divide-x divide-[var(--lg-separator)]">
-          <div className="pr-3">
+          <button
+            type="button"
+            onClick={() => onOpenBills?.('open')}
+            className="pr-3 text-left active:opacity-75 transition-opacity"
+          >
             <span className="text-[11px] font-semibold text-[var(--lg-muted)] flex items-center gap-1">
-              <ArrowUpRight className="w-3.5 h-3.5 text-rose-500" /> Payables (You Owe)
+              <ArrowUpRight className="w-3.5 h-3.5 text-rose-500" /> Open Payables
             </span>
             <p className="text-base font-extrabold text-[var(--lg-foreground)] tabular-nums mt-1">
               {Money.format(analytics.totalPayableMinor)}
@@ -1092,21 +1111,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ? 'All bills settled'
                 : `${analytics.openPayableCount} open ${analytics.openPayableCount === 1 ? 'bill' : 'bills'}`}
             </p>
-          </div>
+          </button>
 
-          <div className="pl-4">
+          <button
+            type="button"
+            onClick={() =>
+              onOpenBills?.(
+                analytics.paidPayableCount === 0 && analytics.partialPayableCount > 0
+                  ? 'partially_paid'
+                  : 'paid'
+              )
+            }
+            className="pl-4 text-left active:opacity-75 transition-opacity"
+          >
             <span className="text-[11px] font-semibold text-[var(--lg-muted)] flex items-center gap-1">
-              <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-500" /> Receivables (Owed)
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Paid Bills
             </span>
             <p className="text-base font-extrabold text-[var(--lg-foreground)] tabular-nums mt-1">
-              {Money.format(analytics.totalReceivableMinor)}
+              {Money.format(analytics.totalPaidPayableMinor)}
             </p>
             <p className="text-[11px] text-[var(--lg-muted)] mt-0.5">
-              {analytics.openReceivableCount === 0
-                ? 'No pending invoices'
-                : `${analytics.openReceivableCount} open ${analytics.openReceivableCount === 1 ? 'invoice' : 'invoices'}`}
+              {analytics.paidPayableCount > 0 && analytics.partialPayableCount > 0
+                ? `${analytics.paidPayableCount} settled • ${analytics.partialPayableCount} partial`
+                : analytics.paidPayableCount > 0
+                  ? `${analytics.paidPayableCount} settled ${analytics.paidPayableCount === 1 ? 'bill' : 'bills'}`
+                  : analytics.partialPayableCount > 0
+                    ? `${analytics.partialPayableCount} partial ${analytics.partialPayableCount === 1 ? 'bill' : 'bills'}`
+                    : 'No settled bills'}
             </p>
-          </div>
+          </button>
         </div>
 
         {analytics.unallocatedAdvancesMinor > 0 && (
@@ -1487,7 +1520,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {item.direction === 'in' ? '+' : item.direction === 'out' ? '-' : ''}
                           {Money.format(item.amountMinor)}
                         </p>
-                        <p className="text-[10px] font-semibold text-[var(--lg-muted)] uppercase">
+                        <p
+                          className={`text-[10px] font-semibold uppercase ${
+                            item.badgeTone === 'positive'
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : item.badgeTone === 'warning'
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-[var(--lg-muted)]'
+                          }`}
+                        >
                           {item.badge}
                         </p>
                       </div>

@@ -133,7 +133,7 @@ const basePayments: Payment[] = [
     direction: 'outgoing',
     accountId: 'acc-2',
     projectId: 'prj-1',
-    amountMinor: 4000000, // 30k allocated + 10k advance — must NOT double-count as expense!
+    amountMinor: 4000000, // Legacy overpaid bill: 30k allocated + 10k extra discarded; must NOT double-count as expense!
     allocatedAmountMinor: 3000000,
     unallocatedAmountMinor: 1000000,
     date: '2026-11-21',
@@ -141,6 +141,21 @@ const basePayments: Payment[] = [
     status: 'posted',
     createdAt: '2026-11-21T08:00:00Z',
     updatedAt: '2026-11-21T08:00:00Z',
+  },
+  {
+    id: 'pay-2',
+    idempotencyKey: 'pk2',
+    direction: 'outgoing',
+    accountId: 'acc-2',
+    projectId: 'prj-1',
+    amountMinor: 1000000, // Standalone contractor advance (Rs 10,000)
+    allocatedAmountMinor: 0,
+    unallocatedAmountMinor: 1000000,
+    date: '2026-11-22',
+    method: 'cash',
+    status: 'posted',
+    createdAt: '2026-11-22T08:00:00Z',
+    updatedAt: '2026-11-22T08:00:00Z',
   },
 ];
 

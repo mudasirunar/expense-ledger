@@ -19,7 +19,7 @@ import { Money } from './money';
 import { ActivityFeedItem, buildActivityFeed } from './dashboardAnalytics';
 import { getPersonalCategoryLabel } from './budgetEngine';
 
-export type SearchFilterCategory = 'all' | 'activity' | 'projects' | 'accounts' | 'contacts';
+export type SearchFilterCategory = 'all' | 'activity' | 'bills' | 'projects' | 'accounts' | 'contacts';
 
 export interface SearchLedgerInput {
   query: string;
@@ -36,6 +36,7 @@ export interface SearchResultsBundle {
   readonly query: string;
   readonly tokens: readonly string[];
   readonly activity: readonly ActivityFeedItem[];
+  readonly bills: readonly Obligation[];
   readonly projects: readonly Project[];
   readonly accounts: readonly Account[];
   readonly contacts: readonly Contact[];
@@ -233,6 +234,7 @@ export function searchLedgerEntities(input: SearchLedgerInput): SearchResultsBun
       query,
       tokens: [],
       activity: [],
+      bills: [],
       projects: [],
       accounts: [],
       contacts: [],
@@ -310,6 +312,35 @@ export function searchLedgerEntities(input: SearchLedgerInput): SearchResultsBun
     }
   }
 
+  const matchedBills = obligations
+    .filter((o) => {
+      if (o.isDeleted || o.status === 'voided' || o.direction !== 'payable') return false;
+      const projName = o.projectId ? projectMap.get(o.projectId)?.name || '' : 'personal';
+      const contactName = o.contactId ? contactMap.get(o.contactId)?.name || '' : '';
+      const haystack = [
+        o.title,
+        'bill',
+        o.type,
+        o.status,
+        o.status === 'partially_paid' ? 'partial' : '',
+        projName,
+        contactName,
+        o.materialDetails?.itemName || '',
+        o.notes || '',
+        searchableDateTokens(o.date, todayKey, yesterdayKey),
+        searchableAmountTokens(o.totalAmountMinor),
+        searchableAmountTokens(o.remainingAmountMinor),
+        searchableAmountTokens(o.allocatedAmountMinor),
+      ].join(' ');
+      return matchesAllTokens(haystack, tokens);
+    })
+    .sort((a, b) => {
+      const aOpen = a.status !== 'paid' && a.remainingAmountMinor > 0 ? 0 : 1;
+      const bOpen = b.status !== 'paid' && b.remainingAmountMinor > 0 ? 0 : 1;
+      if (aOpen !== bOpen) return aOpen - bOpen;
+      return (b.date || '').localeCompare(a.date || '');
+    });
+
   const matchedProjects = projects.filter((p) => {
     if (p.isDeleted) return false;
     const haystack = [
@@ -354,11 +385,13 @@ export function searchLedgerEntities(input: SearchLedgerInput): SearchResultsBun
     query,
     tokens,
     activity: matchedActivity,
+    bills: matchedBills,
     projects: matchedProjects,
     accounts: matchedAccounts,
     contacts: matchedContacts,
     totalCount:
       matchedActivity.length +
+      matchedBills.length +
       matchedProjects.length +
       matchedAccounts.length +
       matchedContacts.length,

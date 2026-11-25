@@ -105,6 +105,12 @@ export interface Payment extends SoftDeletable {
   readonly referenceNumber?: string;
   readonly notes?: string;
   readonly status: PaymentStatus;
+  readonly linkedBillId?: string;
+  readonly linkedBillTitle?: string;
+  readonly billSettlementStatus?: 'paid' | 'partially_paid';
+  readonly billTotalMinor?: number;
+  readonly billPaidAfterMinor?: number;
+  readonly billRemainingAfterMinor?: number;
   readonly createdAt: string;
   readonly updatedAt: string;
 }

@@ -23,18 +23,22 @@ import {
   FirestoreProjectRepository,
   FirestoreTransactionRepository,
 } from '@/data/repositories/firestore';
-import { Account, Contact, Obligation, Payment, Project, Transaction } from '@/domain/entities';
+import { Account, Allocation, Contact, Obligation, Payment, Project, Transaction } from '@/domain/entities';
 import { Money } from '@/domain/accounting/money';
 import { ActivityFeedItem } from '@/domain/accounting/dashboardAnalytics';
 import {
   SearchFilterCategory,
   searchLedgerEntities,
 } from '@/domain/accounting/searchEngine';
+import { formatShortInstallmentDate } from '@/domain/accounting/billPaymentsHelper';
 import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
 import { ActivityDetailSheet } from '@/components/history/ActivityDetailSheet';
 import { ProjectDetailModal } from '@/components/projects/ProjectDetailModal';
 import { ContactDetailModal } from '@/components/contacts/ContactDetailModal';
 import { AccountDetailModal } from '@/components/accounts/AccountDetailModal';
+import { BillDetailView } from '@/components/bills/BillDetailView';
+import { PayBillModal } from '@/components/bills/PayBillModal';
+import { EditBillModal } from '@/components/bills/EditBillModal';
 
 const accountRepo = new FirestoreAccountRepository();
 const contactRepo = new FirestoreContactRepository();
@@ -55,6 +59,7 @@ interface CachedSearchData {
   projects: Project[];
   obligations: Obligation[];
   payments: Payment[];
+  allocations: Allocation[];
 }
 
 let cachedSearchData: CachedSearchData | null = null;
@@ -97,6 +102,9 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
   const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches(userId));
   const [showAllRecent, setShowAllRecent] = useState<boolean>(false);
   const [selectedActivity, setSelectedActivity] = useState<ActivityFeedItem | null>(null);
+  const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
+  const [payingBill, setPayingBill] = useState<Obligation | null>(null);
+  const [editingBill, setEditingBill] = useState<Obligation | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -118,6 +126,9 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
   );
   const [payments, setPayments] = useState<Payment[]>(() =>
     hasWarmCache ? cachedSearchData!.payments : []
+  );
+  const [allocations, setAllocations] = useState<Allocation[]>(() =>
+    hasWarmCache ? cachedSearchData!.allocations : []
   );
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -216,6 +227,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
           projects: [],
           obligations: [],
           payments: [],
+          allocations: [],
         };
       }
       return cachedSearchData;
@@ -295,6 +307,17 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
       )
     );
 
+    unsubs.push(
+      paymentRepo.subscribeAllocations(
+        userId,
+        (allocs) => {
+          setAllocations(allocs);
+          ensureCache().allocations = allocs;
+        },
+        (err) => console.warn('[Search] Allocation subscribe:', err)
+      )
+    );
+
     return () => {
       unsubs.forEach((u) => u());
     };
@@ -362,15 +385,59 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
     [query, accounts, projects, contacts, transactions, obligations, payments]
   );
 
+  // Keep in-place BillDetailView synced with native iOS swipe-back / browser back
+  useEffect(() => {
+    const syncFromHash = () => {
+      const h = window.location.hash.replace(/^#\/?/, '');
+      if (h.toLowerCase().startsWith('search/bill/')) {
+        setSelectedBillId(decodeURIComponent(h.slice('search/bill/'.length)));
+      } else {
+        setSelectedBillId(null);
+      }
+    };
+    window.addEventListener('hashchange', syncFromHash);
+    window.addEventListener('popstate', syncFromHash);
+    return () => {
+      window.removeEventListener('hashchange', syncFromHash);
+      window.removeEventListener('popstate', syncFromHash);
+    };
+  }, []);
+
+  const openBillInSearch = (billId: string) => {
+    setSelectedBillId(billId);
+    const targetHash = `#/search/bill/${encodeURIComponent(billId)}`;
+    if (window.location.hash !== targetHash) {
+      window.history.pushState({ searchBillId: billId }, '', targetHash);
+    }
+  };
+
+  const closeBillInSearch = () => {
+    if (window.location.hash.toLowerCase().startsWith('#/search/bill/')) {
+      window.history.back();
+    } else {
+      setSelectedBillId(null);
+    }
+  };
+
+  const selectedBill = useMemo(
+    () => (selectedBillId ? obligations.find((o) => o.id === selectedBillId) ?? null : null),
+    [selectedBillId, obligations]
+  );
+
   const hasQuery = query.trim().length > 0;
 
+  const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+  const contactMap = useMemo(() => new Map(contacts.map((c) => [c.id, c])), [contacts]);
+
   const showActivity = (filter === 'all' || filter === 'activity') && results.activity.length > 0;
+  const showBills = (filter === 'all' || filter === 'bills') && results.bills.length > 0;
   const showProjects = (filter === 'all' || filter === 'projects') && results.projects.length > 0;
   const showAccounts = (filter === 'all' || filter === 'accounts') && results.accounts.length > 0;
   const showContacts = (filter === 'all' || filter === 'contacts') && results.contacts.length > 0;
 
   const visibleCount =
     (showActivity ? results.activity.length : 0) +
+    (showBills ? results.bills.length : 0) +
     (showProjects ? results.projects.length : 0) +
     (showAccounts ? results.accounts.length : 0) +
     (showContacts ? results.contacts.length : 0);
@@ -547,6 +614,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
                   [
                     { id: 'all', label: `All (${results.totalCount})` },
                     { id: 'activity', label: `Activity (${results.activity.length})` },
+                    { id: 'bills', label: `Bills (${results.bills.length})` },
                     { id: 'projects', label: `Projects (${results.projects.length})` },
                     { id: 'accounts', label: `Accounts (${results.accounts.length})` },
                     { id: 'contacts', label: `Contacts (${results.contacts.length})` },
@@ -652,12 +720,109 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
                                 {item.direction === 'in' ? '+' : item.direction === 'out' ? '-' : ''}
                                 {Money.format(item.amountMinor)}
                               </p>
-                              <p className="text-[10px] font-semibold text-[var(--lg-muted)] uppercase">
+                              <p
+                                className={`text-[10px] font-semibold uppercase ${
+                                  item.badgeTone === 'positive'
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : item.badgeTone === 'warning'
+                                      ? 'text-amber-600 dark:text-amber-400'
+                                      : 'text-[var(--lg-muted)]'
+                                }`}
+                              >
                                 {item.badge}
                               </p>
                             </div>
                           </button>
                         ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Bills Results (Live Bill Entities -> opens standalone BillDetailView) */}
+                  {showBills && (
+                    <section className="space-y-2">
+                      <h2 className="text-xs font-bold tracking-wider text-[var(--lg-muted)] uppercase">
+                        Bills ({results.bills.length})
+                      </h2>
+                      <div className="space-y-1">
+                        {results.bills.map((bill) => {
+                          const isOpen = bill.status !== 'paid' && bill.remainingAmountMinor > 0;
+                          const isPartial = isOpen && bill.allocatedAmountMinor > 0;
+                          const paidPct =
+                            bill.totalAmountMinor > 0
+                              ? Math.min(
+                                  100,
+                                  Math.round((bill.allocatedAmountMinor * 100) / bill.totalAmountMinor)
+                                )
+                              : 0;
+                          const contactName = bill.contactId
+                            ? contactMap.get(bill.contactId)?.name
+                            : undefined;
+                          const projectName = bill.projectId
+                            ? projectMap.get(bill.projectId)?.name
+                            : undefined;
+                          return (
+                            <button
+                              key={bill.id}
+                              type="button"
+                              onClick={() => {
+                                recordRecentSearch(query);
+                                inputRef.current?.blur();
+                                openBillInSearch(bill.id);
+                              }}
+                              className="w-full text-left py-2.5 px-1 -mx-1 rounded-2xl flex items-center justify-between gap-3 active:bg-[var(--lg-glass)] transition-colors"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                    !isOpen
+                                      ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'
+                                      : isPartial
+                                        ? 'bg-amber-500/12 text-amber-600 dark:text-amber-400'
+                                        : 'bg-rose-500/12 text-rose-600 dark:text-rose-400'
+                                  }`}
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-[var(--lg-foreground)] truncate">
+                                    {bill.title}
+                                  </p>
+                                  <p className="text-[11px] text-[var(--lg-muted)] truncate">
+                                    {[contactName, projectName || 'Personal', formatShortInstallmentDate(bill.date)]
+                                      .filter(Boolean)
+                                      .join(' • ')}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="text-right flex-shrink-0 tabular-nums">
+                                <p
+                                  className={`text-xs font-extrabold ${
+                                    isOpen
+                                      ? 'text-rose-600 dark:text-rose-400'
+                                      : 'text-emerald-600 dark:text-emerald-400'
+                                  }`}
+                                >
+                                  {isOpen
+                                    ? Money.format(bill.remainingAmountMinor)
+                                    : Money.format(bill.totalAmountMinor)}
+                                </p>
+                                <p
+                                  className={`text-[10px] font-semibold uppercase ${
+                                    !isOpen
+                                      ? 'text-emerald-600 dark:text-emerald-400'
+                                      : isPartial
+                                        ? 'text-amber-600 dark:text-amber-400'
+                                        : 'text-rose-600/80 dark:text-rose-400/80'
+                                  }`}
+                                >
+                                  {!isOpen ? 'Paid' : isPartial ? `Partial • ${paidPct}%` : 'Unpaid'}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                     </section>
                   )}
@@ -787,6 +952,38 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
           )}
         </main>
       </div>
+
+      {/* In-Place Standalone Bill Detail Overlay (preserves exact Search query & scroll on Back) */}
+      {selectedBill && (
+        <div className="fixed inset-0 z-50">
+          <BillDetailView
+            bill={selectedBill}
+            accounts={accounts}
+            projects={projects}
+            contacts={contacts}
+            payments={payments}
+            allocations={allocations}
+            onBack={closeBillInSearch}
+            onPayBill={(b) => setPayingBill(b)}
+            onEditBill={(b) => setEditingBill(b)}
+          />
+        </div>
+      )}
+
+      <PayBillModal
+        bill={payingBill}
+        accounts={accounts}
+        contactName={payingBill?.contactId ? contactMap.get(payingBill.contactId)?.name : undefined}
+        projectName={payingBill?.projectId ? projectMap.get(payingBill.projectId)?.name : undefined}
+        onClose={() => setPayingBill(null)}
+      />
+
+      <EditBillModal
+        bill={editingBill}
+        projects={projects}
+        contacts={contacts}
+        onClose={() => setEditingBill(null)}
+      />
 
       {/* Reusable Transaction Detail & Share Bottom Sheet */}
       <ActivityDetailSheet

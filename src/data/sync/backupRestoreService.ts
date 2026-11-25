@@ -12,6 +12,7 @@ import {
 } from '@/domain/entities';
 import { Money } from '@/domain/accounting/money';
 import { computeDashboardAnalytics } from '@/domain/accounting/dashboardAnalytics';
+import { resolveBillPaymentSummary } from '@/domain/accounting/billPaymentsHelper';
 import {
   FinancialReportBundle,
   ReportPeriod,
@@ -258,7 +259,7 @@ function formatLocalTime12h(isoTimestamp?: string): string {
  */
 export function buildTransactionsCsv(
   data: Pick<BackupDataPayload, 'transactions' | 'accounts' | 'projects' | 'contacts'> &
-    Partial<Pick<BackupDataPayload, 'obligations' | 'payments'>>
+    Partial<Pick<BackupDataPayload, 'obligations' | 'payments' | 'allocations'>>
 ): string {
   const accountMap = new Map(data.accounts.map((a) => [a.id, a.name]));
   const projectMap = new Map(data.projects.map((p) => [p.id, p.name]));
@@ -309,13 +310,27 @@ export function buildTransactionsCsv(
     });
   }
 
+  const obligationMap = new Map((data.obligations ?? []).map((o) => [o.id, o]));
+
   for (const ob of data.obligations ?? []) {
     if (ob.status === 'voided') continue;
+    const summary = resolveBillPaymentSummary(
+      ob.id,
+      data.payments ?? [],
+      data.allocations ?? [],
+      data.accounts
+    );
     const noteParts: string[] = [];
     if (ob.title) noteParts.push(ob.title);
     if (ob.materialDetails) {
       const { quantity, unit, unitPriceMinor } = ob.materialDetails;
       noteParts.push(`${quantity} ${unit} @ ${Money.toMajorString(unitPriceMinor)}`);
+    }
+    if (summary.installments.length > 0) {
+      const breakdown = summary.installments
+        .map((i) => `${i.date}: ${i.accountName} (${Money.toMajorString(i.amountMinor)})`)
+        .join('; ');
+      noteParts.push(`Payments: ${breakdown}`);
     }
     if (ob.notes) noteParts.push(ob.notes);
 
@@ -330,7 +345,7 @@ export function buildTransactionsCsv(
         ob.projectId ? 'project' : 'personal',
         Money.toMajorString(ob.totalAmountMinor || 0),
         ob.status || '',
-        '',
+        summary.accountsSummary,
         '',
         ob.projectId ? projectMap.get(ob.projectId) || ob.projectId : '',
         ob.contactId ? contactMap.get(ob.contactId) || ob.contactId : '',
@@ -341,10 +356,25 @@ export function buildTransactionsCsv(
 
   for (const pay of data.payments ?? []) {
     if (pay.status === 'voided') continue;
+    const isBillPay = Boolean(pay.linkedBillId || (pay.allocatedAmountMinor || 0) > 0);
+    const linkedBill = pay.linkedBillId ? obligationMap.get(pay.linkedBillId) : undefined;
+    const billTitle = pay.linkedBillTitle || linkedBill?.title;
+    const settlementLabel = isBillPay
+      ? pay.billSettlementStatus === 'partially_paid'
+        ? 'Partially Paid'
+        : 'Bill Paid'
+      : pay.direction || '';
+
     const noteParts: string[] = [];
+    if (billTitle) noteParts.push(`Bill: ${billTitle}`);
     if (pay.method) noteParts.push(pay.method);
     if (pay.referenceNumber) noteParts.push(`Ref ${pay.referenceNumber}`);
     if (pay.notes) noteParts.push(pay.notes);
+
+    const effectiveAmountMinor =
+      isBillPay && (pay.allocatedAmountMinor || 0) > 0
+        ? pay.allocatedAmountMinor
+        : pay.amountMinor || 0;
 
     entries.push({
       date: pay.date || '',
@@ -353,9 +383,9 @@ export function buildTransactionsCsv(
         pay.date || '',
         pay.time || formatLocalTime(pay.createdAt),
         'Payment',
-        pay.direction || '',
+        settlementLabel,
         pay.projectId ? 'project' : 'personal',
-        Money.toMajorString(pay.amountMinor || 0),
+        Money.toMajorString(effectiveAmountMinor),
         pay.status || '',
         accountMap.get(pay.accountId) || pay.accountId || '',
         '',
@@ -447,8 +477,8 @@ export function buildLedgerWorkbookSheets(data: BackupDataPayload): {
     ['Total Inflow', toExcelAmount(analytics.totalInflowMinor)],
     ['Total Outflow', toExcelAmount(analytics.totalOutflowMinor)],
     ['Net Flow', toExcelAmount(analytics.netFlowMinor)],
-    ['Payables (You Owe)', toExcelAmount(analytics.totalPayableMinor)],
-    ['Receivables (Owed to You)', toExcelAmount(analytics.totalReceivableMinor)],
+    ['Open Payables', toExcelAmount(analytics.totalPayableMinor)],
+    ['Paid Bills', toExcelAmount(analytics.totalPaidPayableMinor)],
     ['Unallocated Advances', toExcelAmount(analytics.unallocatedAdvancesMinor)],
   ];
 
@@ -539,6 +569,7 @@ export function buildLedgerWorkbookSheets(data: BackupDataPayload): {
   const activeBills = sortLatestFirst(
     data.obligations.filter((o) => o.status !== 'voided')
   );
+  const billById = new Map(data.obligations.map((o) => [o.id, o]));
   const billRows: (string | number)[][] = [
     [
       'Date',
@@ -555,25 +586,42 @@ export function buildLedgerWorkbookSheets(data: BackupDataPayload): {
       'Paid (PKR)',
       'Remaining (PKR)',
       'Status',
+      'Paid Via',
+      'Payment Breakdown',
       'Notes',
     ],
-    ...activeBills.map((ob) => [
-      ob.date || '',
-      formatLocalTime12h(ob.createdAt),
-      ob.title || '',
-      formatPrettyLabel(ob.type),
-      ob.direction === 'receivable' ? 'Receivable' : 'Payable',
-      ob.projectId ? projectMap.get(ob.projectId) || '' : 'Personal',
-      ob.contactId ? contactMap.get(ob.contactId) || '' : '',
-      ob.materialDetails?.quantity ?? '',
-      ob.materialDetails?.unit ?? '',
-      ob.materialDetails ? toExcelAmount(ob.materialDetails.unitPriceMinor) : '',
-      toExcelAmount(ob.totalAmountMinor),
-      toExcelAmount(ob.allocatedAmountMinor),
-      toExcelAmount(ob.remainingAmountMinor),
-      formatPrettyLabel(ob.status),
-      ob.notes || '',
-    ]),
+    ...activeBills.map((ob) => {
+      const summary = resolveBillPaymentSummary(
+        ob.id,
+        data.payments,
+        data.allocations,
+        data.accounts
+      );
+      const breakdownStr = summary.installments
+        .map((i) => `${i.date}: ${i.accountName} (${Money.toMajorString(i.amountMinor)})`)
+        .join('; ');
+      return [
+        ob.date || '',
+        formatLocalTime12h(ob.createdAt),
+        ob.title || '',
+        formatPrettyLabel(ob.type),
+        ob.direction === 'receivable' ? 'Receivable' : 'Payable',
+        ob.projectId ? projectMap.get(ob.projectId) || '' : 'Personal',
+        ob.contactId ? contactMap.get(ob.contactId) || '' : '',
+        ob.materialDetails && ob.materialDetails.quantity > 0 ? ob.materialDetails.quantity : '',
+        ob.materialDetails && ob.materialDetails.quantity > 0 ? ob.materialDetails.unit : '',
+        ob.materialDetails && ob.materialDetails.unitPriceMinor > 0
+          ? toExcelAmount(ob.materialDetails.unitPriceMinor)
+          : '',
+        toExcelAmount(ob.totalAmountMinor),
+        toExcelAmount(ob.allocatedAmountMinor),
+        toExcelAmount(ob.remainingAmountMinor),
+        formatPrettyLabel(ob.status),
+        summary.accountsSummary,
+        breakdownStr,
+        ob.notes || '',
+      ];
+    }),
   ];
 
   // 5. Payments Sheet
@@ -585,6 +633,8 @@ export function buildLedgerWorkbookSheets(data: BackupDataPayload): {
       'Date',
       'Time',
       'Direction',
+      'Settlement',
+      'Linked Bill',
       'Account',
       'Method',
       'Project',
@@ -595,20 +645,39 @@ export function buildLedgerWorkbookSheets(data: BackupDataPayload): {
       'Reference #',
       'Notes',
     ],
-    ...activePayments.map((pay) => [
-      pay.date || '',
-      pay.time || formatLocalTime12h(pay.createdAt),
-      pay.direction === 'incoming' ? 'Incoming' : 'Outgoing',
-      accountMap.get(pay.accountId) || '',
-      formatPrettyLabel(pay.method),
-      pay.projectId ? projectMap.get(pay.projectId) || '' : 'Personal',
-      pay.contactId ? contactMap.get(pay.contactId) || '' : '',
-      toExcelAmount(pay.amountMinor),
-      toExcelAmount(pay.allocatedAmountMinor),
-      toExcelAmount(pay.unallocatedAmountMinor),
-      pay.referenceNumber || '',
-      pay.notes || '',
-    ]),
+    ...activePayments.map((pay) => {
+      const isBillPay = Boolean(pay.linkedBillId || (pay.allocatedAmountMinor || 0) > 0);
+      const linkedBill = pay.linkedBillId ? billById.get(pay.linkedBillId) : undefined;
+      const billTitle = pay.linkedBillTitle || linkedBill?.title || '';
+      const settlementLabel = isBillPay
+        ? pay.billSettlementStatus === 'partially_paid'
+          ? 'Partially Paid'
+          : 'Bill Paid'
+        : pay.unallocatedAmountMinor > 0
+          ? 'Advance'
+          : 'Payment';
+      const effectiveAmountMinor =
+        isBillPay && (pay.allocatedAmountMinor || 0) > 0
+          ? pay.allocatedAmountMinor
+          : pay.amountMinor || 0;
+      const effectiveAdvanceMinor = isBillPay ? 0 : pay.unallocatedAmountMinor || 0;
+      return [
+        pay.date || '',
+        pay.time || formatLocalTime12h(pay.createdAt),
+        pay.direction === 'incoming' ? 'Incoming' : 'Outgoing',
+        settlementLabel,
+        billTitle,
+        accountMap.get(pay.accountId) || '',
+        formatPrettyLabel(pay.method),
+        pay.projectId ? projectMap.get(pay.projectId) || '' : 'Personal',
+        pay.contactId ? contactMap.get(pay.contactId) || '' : '',
+        toExcelAmount(effectiveAmountMinor),
+        toExcelAmount(pay.allocatedAmountMinor),
+        toExcelAmount(effectiveAdvanceMinor),
+        pay.referenceNumber || '',
+        pay.notes || '',
+      ];
+    }),
   ];
 
   const totalEntries =

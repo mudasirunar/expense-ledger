@@ -5,16 +5,26 @@ import {
   ArrowUpRight,
   FileText,
   Loader2,
+  Pencil,
   Share,
 } from 'lucide-react';
 import { Button } from 'glisse';
-import { Account, Contact, Obligation, Payment, Project, Transaction } from '@/domain/entities';
+import { Account, Allocation, Contact, Obligation, Payment, Project, Transaction } from '@/domain/entities';
 import { Money } from '@/domain/accounting/money';
 import { ActivityFeedItem } from '@/domain/accounting/dashboardAnalytics';
+import {
+  formatShortInstallmentDate,
+  resolveBillPaymentSummary,
+} from '@/domain/accounting/billPaymentsHelper';
+import { FirestorePaymentRepository } from '@/data/repositories/firestore';
 import { ModalPortal } from '@/components/common/ModalPortal';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useSnackbar } from '@/app/providers/SnackbarProvider';
 import { ReceiptVisualKind, shareReceiptImage } from '@/data/sync/receiptShareService';
+import { PayBillModal } from '@/components/bills/PayBillModal';
+import { EditBillModal } from '@/components/bills/EditBillModal';
+
+const paymentRepo = new FirestorePaymentRepository();
 
 function formatFullDate(dateKey: string | undefined): string {
   if (!dateKey) return '—';
@@ -59,6 +69,14 @@ export interface ActivityDetailSheetProps {
   transactions: readonly Transaction[];
   obligations: readonly Obligation[];
   payments: readonly Payment[];
+  allocations?: readonly Allocation[];
+  /**
+   * 'historical' (default — History, Dashboard Recent Activity, Search):
+   *   Shows the immutable point-in-time "Bill Logged" record without later payment updates.
+   * 'live' (Bills screen):
+   *   Shows the present live status, Paid/Remaining, Paid Via, Payment Breakdown, and Pay/Edit actions.
+   */
+  billDetailMode?: 'historical' | 'live';
 }
 
 export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
@@ -70,10 +88,15 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
   transactions,
   obligations,
   payments,
+  allocations: externalAllocations,
+  billDetailMode = 'historical',
 }) => {
   const { user } = useAuth();
   const { showSnackbar } = useSnackbar();
   const [isSharingReceipt, setIsSharingReceipt] = useState(false);
+  const [payingBill, setPayingBill] = useState<Obligation | null>(null);
+  const [editingBill, setEditingBill] = useState<Obligation | null>(null);
+  const [fetchedBillAllocations, setFetchedBillAllocations] = useState<Allocation[]>([]);
 
   useEffect(() => {
     if (!selectedItem) return;
@@ -88,8 +111,54 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
   const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
   const contactMap = useMemo(() => new Map(contacts.map((c) => [c.id, c])), [contacts]);
 
+  const activeBill = useMemo(() => {
+    if (!selectedItem || selectedItem.kind !== 'obligation') return null;
+    const rawId = selectedItem.id.replace(/^ob-/, '');
+    return obligations.find((o) => o.id === rawId) ?? null;
+  }, [selectedItem, obligations]);
+
+  const isLiveBillMode = billDetailMode === 'live';
+
+  useEffect(() => {
+    if (!isLiveBillMode || externalAllocations !== undefined || !activeBill) {
+      setFetchedBillAllocations([]);
+      return;
+    }
+    let cancelled = false;
+    const uid = user?.uid || 'guest-user';
+    paymentRepo
+      .listAllocationsForObligation(uid, activeBill.id)
+      .then((list) => {
+        if (!cancelled) setFetchedBillAllocations(list);
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedBillAllocations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLiveBillMode, activeBill?.id, externalAllocations, user?.uid]);
+
+  const effectiveAllocations = externalAllocations ?? fetchedBillAllocations;
+
+  const billPaymentSummary = useMemo(() => {
+    if (!isLiveBillMode || !activeBill) return null;
+    return resolveBillPaymentSummary(activeBill.id, payments, effectiveAllocations, accounts);
+  }, [isLiveBillMode, activeBill, payments, effectiveAllocations, accounts]);
+
+  const canPayBill = Boolean(
+    isLiveBillMode &&
+      activeBill &&
+      activeBill.direction === 'payable' &&
+      activeBill.status !== 'paid' &&
+      activeBill.status !== 'voided' &&
+      activeBill.remainingAmountMinor > 0
+  );
+
   const selectedDetails = useMemo<{
     rows: DetailRow[];
+    paymentBreakdown?: Array<{ label: string; amountText: string }>;
+    paymentBreakdownTotalText?: string;
     notes?: string;
     recordId?: string;
     visualKind: ReceiptVisualKind;
@@ -161,13 +230,29 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
       rows.push({ label: 'Type', value: formatLabel(ob.type) });
       rows.push({
         label: 'Direction',
-        value: ob.direction === 'payable' ? 'Payable (You Owe)' : 'Receivable (Owed to You)',
+        value: ob.direction === 'payable' ? 'Payable' : 'Receivable',
       });
-      rows.push({ label: 'Status', value: formatLabel(ob.status) });
+      if (isLiveBillMode) {
+        rows.push({
+          label: 'Status',
+          value: formatLabel(ob.status),
+          highlight:
+            ob.status === 'paid'
+              ? 'positive'
+              : ob.status === 'partially_paid'
+                ? 'warning'
+                : 'negative',
+        });
+      } else {
+        rows.push({
+          label: 'Action',
+          value: 'Bill Logged',
+        });
+      }
       rows.push({ label: 'Date', value: formatFullDate(ob.date) });
       if (timeStr) rows.push({ label: 'Time', value: timeStr });
 
-      if (ob.allocatedAmountMinor > 0) {
+      if (isLiveBillMode && ob.allocatedAmountMinor > 0) {
         rows.push({
           label: 'Paid',
           value: Money.format(ob.allocatedAmountMinor),
@@ -194,13 +279,28 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
         }
       }
 
+      const paymentBreakdown =
+        isLiveBillMode && billPaymentSummary && billPaymentSummary.installments.length > 0
+          ? billPaymentSummary.installments.map((inst) => ({
+              label: `${formatShortInstallmentDate(inst.date)} • ${inst.accountName}`,
+              amountText: Money.format(inst.amountMinor),
+            }))
+          : undefined;
+
       return {
         rows,
+        paymentBreakdown,
+        paymentBreakdownTotalText:
+          paymentBreakdown && ob.allocatedAmountMinor > 0
+            ? Money.format(ob.allocatedAmountMinor)
+            : undefined,
         notes: ob.notes,
         recordId: ob.id,
         visualKind: 'bill',
-        receiptBadge: `BILL • ${formatLabel(ob.status).toUpperCase()}`,
-        isPaidBill: ob.status === 'paid',
+        receiptBadge: isLiveBillMode
+          ? `BILL • ${formatLabel(ob.status).toUpperCase()}`
+          : 'BILL LOGGED',
+        isPaidBill: isLiveBillMode && ob.status === 'paid',
       };
     }
 
@@ -214,6 +314,55 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
     const proj = pay.projectId ? projectMap.get(pay.projectId) : undefined;
     const contact = pay.contactId ? contactMap.get(pay.contactId) : undefined;
     const timeStr = formatTimeFromIso(pay.createdAt, pay.time);
+    const isBillPayment = Boolean(pay.linkedBillId || (pay.allocatedAmountMinor || 0) > 0);
+    const linkedBill = pay.linkedBillId
+      ? obligations.find((o) => o.id === pay.linkedBillId)
+      : undefined;
+    const linkedBillTitle = pay.linkedBillTitle || linkedBill?.title;
+
+    if (isBillPayment) {
+      const outcome =
+        pay.billSettlementStatus ||
+        (linkedBill ? (linkedBill.status === 'paid' ? 'paid' : 'partially_paid') : 'paid');
+      const isFullSettlement = outcome === 'paid';
+
+      if (linkedBillTitle) {
+        rows.push({ label: 'Bill', value: linkedBillTitle });
+      }
+      rows.push({
+        label: 'Status',
+        value: isFullSettlement ? 'Bill Paid' : 'Partially Paid',
+        highlight: isFullSettlement ? 'positive' : 'warning',
+      });
+      rows.push({ label: 'Date', value: formatFullDate(pay.date) });
+      if (timeStr) rows.push({ label: 'Time', value: timeStr });
+      rows.push({ label: 'Paid From', value: acc?.name || 'Account' });
+      rows.push({ label: 'Method', value: formatLabel(pay.method) });
+      if (proj) rows.push({ label: 'Project', value: proj.name });
+      if (contact) rows.push({ label: 'Contact', value: contact.name });
+      if (typeof pay.billTotalMinor === 'number' && pay.billTotalMinor > 0) {
+        rows.push({ label: 'Bill Total', value: Money.format(pay.billTotalMinor) });
+      }
+      if (typeof pay.billRemainingAfterMinor === 'number') {
+        rows.push({
+          label: 'Remaining After',
+          value: Money.format(pay.billRemainingAfterMinor),
+          highlight: pay.billRemainingAfterMinor > 0 ? 'warning' : 'positive',
+        });
+      }
+      if (pay.referenceNumber) {
+        rows.push({ label: 'Reference #', value: pay.referenceNumber, mono: true });
+      }
+
+      return {
+        rows,
+        notes: pay.notes,
+        recordId: pay.id,
+        visualKind: 'bill',
+        receiptBadge: isFullSettlement ? 'BILL PAID' : 'BILL • PARTIALLY PAID',
+        isPaidBill: isFullSettlement,
+      };
+    }
 
     rows.push({
       label: 'Direction',
@@ -225,9 +374,6 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
     rows.push({ label: 'Method', value: formatLabel(pay.method) });
     if (proj) rows.push({ label: 'Project', value: proj.name });
     if (contact) rows.push({ label: 'Contact', value: contact.name });
-    if (pay.allocatedAmountMinor > 0) {
-      rows.push({ label: 'Allocated to Bills', value: Money.format(pay.allocatedAmountMinor) });
-    }
     if (pay.unallocatedAmountMinor > 0) {
       rows.push({
         label: 'Unallocated Advance',
@@ -244,7 +390,7 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
       visualKind: 'payment',
       receiptBadge: `PAYMENT • ${selectedItem.badge.toUpperCase()}`,
     };
-  }, [selectedItem, transactions, obligations, payments, accountMap, projectMap, contactMap]);
+  }, [selectedItem, transactions, obligations, payments, accountMap, projectMap, contactMap, billPaymentSummary, isLiveBillMode]);
 
   const handleShareReceipt = async () => {
     if (!selectedItem || !selectedDetails || isSharingReceipt) return;
@@ -260,6 +406,8 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
         title: selectedItem.title,
         amountText: signedAmount,
         rows: selectedDetails.rows.map((r) => ({ label: r.label, value: r.value })),
+        paymentBreakdown: selectedDetails.paymentBreakdown,
+        paymentBreakdownTotalText: selectedDetails.paymentBreakdownTotalText,
         notes: selectedDetails.notes,
         recordId: selectedDetails.recordId || selectedItem.id,
         isPaidBill: selectedDetails.isPaidBill,
@@ -286,10 +434,12 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
     }
   };
 
-  if (!selectedItem || !selectedDetails) return null;
+  if (!selectedItem && !payingBill && !editingBill) return null;
 
   return (
-    <ModalPortal isOpen={true}>
+    <>
+      {selectedItem && selectedDetails && (
+        <ModalPortal isOpen={true}>
       <div
         role="dialog"
         aria-modal="true"
@@ -399,6 +549,30 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
             ))}
           </div>
 
+          {/* Compact Payment Breakdown (Unified Bill Installments) */}
+          {selectedDetails.paymentBreakdown && selectedDetails.paymentBreakdown.length > 0 && (
+            <div className="space-y-1.5 pt-2 border-t border-[var(--lg-separator)]">
+              <p className="text-[11px] font-bold text-[var(--lg-muted)] uppercase tracking-wider">
+                Payment Breakdown
+              </p>
+              <div className="space-y-1">
+                {selectedDetails.paymentBreakdown.map((entry, idx) => (
+                  <div
+                    key={`${entry.label}-${idx}`}
+                    className="flex items-center justify-between gap-3 text-xs py-0.5"
+                  >
+                    <span className="text-[var(--lg-muted)] font-medium truncate">
+                      {entry.label}
+                    </span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums flex-shrink-0">
+                      {entry.amountText}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Notes (if any) */}
           {selectedDetails.notes && selectedDetails.notes.trim() && (
             <div className="space-y-1 pt-1">
@@ -418,6 +592,40 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
             </p>
           )}
 
+          {/* Bill Settlement & Edit Actions (Live Bills screen only) */}
+          {isLiveBillMode && activeBill && activeBill.status !== 'voided' && (
+            <div className="flex items-center gap-2 pt-1">
+              {canPayBill && (
+                <Button
+                  variant="filled"
+                  tint="#2563EB"
+                  type="button"
+                  onClick={() => {
+                    const target = activeBill;
+                    onClose();
+                    setPayingBill(target);
+                  }}
+                  className="!flex-1 !py-2.5 !rounded-[24px] font-bold !text-sm"
+                >
+                  Pay Bill
+                </Button>
+              )}
+              <Button
+                variant="glass"
+                type="button"
+                onClick={() => {
+                  const target = activeBill;
+                  onClose();
+                  setEditingBill(target);
+                }}
+                icon={<Pencil className="w-4 h-4" />}
+                className={`${canPayBill ? '!px-5' : '!w-full'} !py-2.5 !rounded-[24px] font-semibold !text-sm !text-[var(--lg-foreground)]`}
+              >
+                Edit
+              </Button>
+            </div>
+          )}
+
           {/* Close Button */}
           <Button
             variant="glass"
@@ -430,5 +638,23 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
         </div>
       </div>
     </ModalPortal>
+      )}
+
+      {/* Settlement & Edit Modals launched from Bill Detail Sheet */}
+      <PayBillModal
+        bill={payingBill}
+        accounts={accounts}
+        contactName={payingBill?.contactId ? contactMap.get(payingBill.contactId)?.name : undefined}
+        projectName={payingBill?.projectId ? projectMap.get(payingBill.projectId)?.name : undefined}
+        onClose={() => setPayingBill(null)}
+      />
+
+      <EditBillModal
+        bill={editingBill}
+        projects={projects}
+        contacts={contacts}
+        onClose={() => setEditingBill(null)}
+      />
+    </>
   );
 };

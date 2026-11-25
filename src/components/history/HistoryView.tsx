@@ -66,12 +66,14 @@ function formatDateGroupLabel(dateKey: string): string {
 
 type HistoryTypeFilter = 'all' | 'expense' | 'income' | 'transfer' | 'bill' | 'payment';
 
-function getItemCategory(item: ActivityFeedItem): Exclude<HistoryTypeFilter, 'all'> {
-  if (item.kind === 'obligation') return 'bill';
-  if (item.kind === 'payment') return 'payment';
-  if (item.direction === 'neutral') return 'transfer';
-  if (item.direction === 'in') return 'income';
-  return 'expense';
+function itemMatchesFilter(item: ActivityFeedItem, filter: HistoryTypeFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'bill') return item.kind === 'obligation' || Boolean(item.isBillPayment);
+  if (filter === 'payment') return item.kind === 'payment';
+  if (item.kind !== 'transaction') return false;
+  if (filter === 'transfer') return item.direction === 'neutral';
+  if (filter === 'income') return item.direction === 'in';
+  return item.direction === 'out';
 }
 
 interface HistoryViewProps {
@@ -266,14 +268,18 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
       payment: 0,
     };
     for (const item of feed) {
-      counts[getItemCategory(item)] += 1;
+      if (itemMatchesFilter(item, 'expense')) counts.expense += 1;
+      if (itemMatchesFilter(item, 'income')) counts.income += 1;
+      if (itemMatchesFilter(item, 'transfer')) counts.transfer += 1;
+      if (itemMatchesFilter(item, 'bill')) counts.bill += 1;
+      if (itemMatchesFilter(item, 'payment')) counts.payment += 1;
     }
     return counts;
   }, [feed]);
 
   const filteredFeed = useMemo(() => {
     if (typeFilter === 'all') return feed;
-    return feed.filter((item) => getItemCategory(item) === typeFilter);
+    return feed.filter((item) => itemMatchesFilter(item, typeFilter));
   }, [feed, typeFilter]);
 
   useEffect(() => {
@@ -476,7 +482,15 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                             {item.direction === 'in' ? '+' : item.direction === 'out' ? '-' : ''}
                             {Money.format(item.amountMinor)}
                           </p>
-                          <p className="text-[10px] font-semibold text-[var(--lg-muted)] uppercase">
+                          <p
+                            className={`text-[10px] font-semibold uppercase ${
+                              item.badgeTone === 'positive'
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : item.badgeTone === 'warning'
+                                  ? 'text-amber-600 dark:text-amber-400'
+                                  : 'text-[var(--lg-muted)]'
+                            }`}
+                          >
                             {item.badge}
                           </p>
                         </div>

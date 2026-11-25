@@ -83,6 +83,12 @@ export class AllocationEngine {
       ...payment,
       allocatedAmountMinor: newPaymentAllocated,
       unallocatedAmountMinor: newPaymentUnallocated,
+      linkedBillId: obligation.id,
+      linkedBillTitle: obligation.title,
+      billSettlementStatus: newObligationStatus,
+      billTotalMinor: obligation.totalAmountMinor,
+      billPaidAfterMinor: newObligationAllocated,
+      billRemainingAfterMinor: newObligationRemaining,
       updatedAt: nowIso,
     };
 

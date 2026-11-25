@@ -111,11 +111,28 @@ body.modal-open .scroll-container {
   overscroll-behavior: contain !important;
 }
 
-/* Centered modals re-center inside the visible area above the iOS keyboard; background stays static.
-   Bottom sheets ([data-bottom-sheet="true"]) stay flush edge-to-edge at the bottom. */
+/* Centered modals re-center inside the visible area between the status bar and the iOS keyboard;
+   constraining the modal card to max-height: 100% of that padded area keeps tall modals from
+   overflowing off the top under the status bar. Bottom sheets stay flush edge-to-edge. */
 body.modal-open .fixed.inset-0.z-50:not([data-bottom-sheet="true"]) {
+  padding-top: max(0.75rem, var(--top-spacer, env(safe-area-inset-top, 0px))) !important;
   padding-bottom: calc(0.75rem + var(--kb, 0px)) !important;
-  transition: padding-bottom 150ms ease-out;
+}
+
+body.modal-open .fixed.inset-0.z-50:not([data-bottom-sheet="true"]) > div {
+  max-height: 100% !important;
+}
+
+/* Hide visible scrollbars inside all modals & bottom sheets while keeping smooth scrolling */
+.fixed.inset-0.z-50,
+.fixed.inset-0.z-50 > div {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.fixed.inset-0.z-50::-webkit-scrollbar,
+.fixed.inset-0.z-50 > div::-webkit-scrollbar {
+  display: none;
 }
 
 /* Tabular figures for aligned financial numbers */

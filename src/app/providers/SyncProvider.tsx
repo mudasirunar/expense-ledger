@@ -11,7 +11,16 @@ import {
   subscribeToWipeState,
 } from '@/data/sync/dataWipeService';
 
-const MONITORED_COLLECTIONS = ['projects', 'contacts', 'accounts', 'transactions', 'budgets'] as const;
+const MONITORED_COLLECTIONS = [
+  'projects',
+  'contacts',
+  'accounts',
+  'transactions',
+  'obligations',
+  'payments',
+  'allocations',
+  'budgets',
+] as const;
 
 interface SyncContextType {
   isOnline: boolean;

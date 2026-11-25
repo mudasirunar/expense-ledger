@@ -207,7 +207,7 @@ describe('Smart Merge Backup, Restore & CSV Export Service', () => {
     expect(lines[0]).toBe('Date,Time,Record,Type,Scope,Amount (PKR),Status,Account,Target Account,Project,Contact,Notes');
     // Latest-first: Feb 12 Bill -> Feb 11 Payment -> Feb 10 14:30 Income -> Feb 10 00:00 Expense
     expect(lines[1]).toMatch(/^2026-02-12,\d{2}:\d{2}:\d{2},Bill,purchase,project,120000\.00,unpaid,,,Villa A \(Old Backup Name\),,100 Bags Cement$/);
-    expect(lines[2]).toMatch(/^2026-02-11,\d{2}:\d{2}:\d{2},Payment,outgoing,project,40000\.00,posted,Main Cash \(Updated in Backup\),,Villa A \(Old Backup Name\),,cash — First installment$/);
+    expect(lines[2]).toMatch(/^2026-02-11,\d{2}:\d{2}:\d{2},Payment,Bill Paid,project,40000\.00,posted,Main Cash \(Updated in Backup\),,Villa A \(Old Backup Name\),,cash — First installment$/);
     expect(lines[3]).toMatch(/^2026-02-10,\d{2}:\d{2}:\d{2},Transaction,income,personal,500\.00,posted,Main Cash \(Updated in Backup\),,,,Later deposit$/);
     expect(lines[4]).toMatch(
       /^2026-02-10,\d{2}:\d{2}:\d{2},Transaction,expense,project,125\.50,posted,Main Cash \(Updated in Backup\),,Villa A \(Old Backup Name\),,"Cement, ""Grade A"""$/

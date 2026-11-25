@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Project, Contact, Account, PaymentMethod } from '@/domain/entities';
+import { Project, Contact, Account, Obligation, ObligationStatus, PaymentMethod } from '@/domain/entities';
 import { 
   FirestoreProjectRepository, 
   FirestoreContactRepository, 
@@ -14,8 +14,9 @@ import { PERSONAL_EXPENSE_CATEGORIES } from '@/domain/accounting/budgetEngine';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useSnackbar } from '@/app/providers/SnackbarProvider';
 import { Button, Input, SegmentedControl } from 'glisse';
-import { X, AlertCircle, Calendar } from 'lucide-react';
+import { X, Calendar } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
+import { FormErrorBanner } from '@/components/common/FormErrorBanner';
 import { registerMemoryCacheClearer, awaitLocalCommit } from '@/data/sync/dataWipeService';
 
 const projectRepo = new FirestoreProjectRepository();
@@ -25,13 +26,16 @@ const transactionRepo = new FirestoreTransactionRepository();
 const obligationRepo = new FirestoreObligationRepository();
 const paymentRepo = new FirestorePaymentRepository();
 
+export type EntryType = 'expense' | 'income' | 'obligation' | 'payment';
+
 interface QuickAddModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  initialEntryType?: EntryType;
+  lockEntryType?: boolean;
+  editingBill?: Obligation | null;
 }
-
-type EntryType = 'expense' | 'income' | 'obligation' | 'payment';
 
 // In-memory cache for instant modal dropdown population (< 1ms)
 let cachedQuickAddData: {
@@ -39,17 +43,29 @@ let cachedQuickAddData: {
   projects: Project[];
   contacts: Contact[];
   accounts: Account[];
+  obligations: Obligation[];
 } | null = null;
 registerMemoryCacheClearer(() => {
   cachedQuickAddData = null;
 });
 
-export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const QuickAddModal: React.FC<QuickAddModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  initialEntryType = 'expense',
+  lockEntryType = false,
+  editingBill = null,
+}) => {
   const { user } = useAuth();
   const { showSnackbar } = useSnackbar();
   const userId = user?.uid || 'guest-user';
 
-  const [entryType, setEntryType] = useState<EntryType>('expense');
+  const isEditingBill = Boolean(editingBill);
+  const isTabLocked = lockEntryType || isEditingBill;
+  const [entryType, setEntryType] = useState<EntryType>(
+    isEditingBill ? 'obligation' : initialEntryType
+  );
   const [projects, setProjects] = useState<Project[]>(() => {
     return cachedQuickAddData && cachedQuickAddData.userId === userId ? cachedQuickAddData.projects : [];
   });
@@ -58,6 +74,9 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
   });
   const [accounts, setAccounts] = useState<Account[]>(() => {
     return cachedQuickAddData && cachedQuickAddData.userId === userId ? cachedQuickAddData.accounts : [];
+  });
+  const [obligations, setObligations] = useState<Obligation[]>(() => {
+    return cachedQuickAddData && cachedQuickAddData.userId === userId ? cachedQuickAddData.obligations : [];
   });
 
   // Common fields
@@ -72,6 +91,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
   const [contactId, setContactId] = useState<string>('');
   const [accountId, setAccountId] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [selectedBillId, setSelectedBillId] = useState<string>('');
 
   // Material purchase specific
   const [itemName, setItemName] = useState<string>('');
@@ -84,23 +104,115 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
 
   useEffect(() => {
     if (!isOpen) return;
+    setError(null);
+    if (editingBill) {
+      setEntryType('obligation');
+      setTitle(editingBill.title || '');
+      setItemName(editingBill.materialDetails?.itemName || editingBill.title || '');
+      const major = Money.toMajorString(editingBill.totalAmountMinor);
+      setAmountStr(major.endsWith('.00') ? major.slice(0, -3) : major);
+      setDate(editingBill.date || new Date().toISOString().slice(0, 10));
+      setProjectId(editingBill.projectId || '');
+      setContactId(editingBill.contactId || '');
+      setNotes(editingBill.notes || '');
+      if (editingBill.materialDetails) {
+        setQuantity(
+          editingBill.materialDetails.quantity > 0
+            ? String(editingBill.materialDetails.quantity)
+            : ''
+        );
+        setUnit(editingBill.materialDetails.unit || '');
+        if (editingBill.materialDetails.unitPriceMinor > 0) {
+          const upMajor = Money.toMajorString(editingBill.materialDetails.unitPriceMinor);
+          setUnitPriceStr(upMajor.endsWith('.00') ? upMajor.slice(0, -3) : upMajor);
+        } else {
+          setUnitPriceStr('');
+        }
+      } else {
+        setQuantity('');
+        setUnit('');
+        setUnitPriceStr('');
+      }
+    } else {
+      setEntryType(initialEntryType);
+    }
 
     Promise.all([
       projectRepo.list(userId),
       contactRepo.list(userId),
       accountRepo.list(userId),
-    ]).then(([prjs, cnts, accs]) => {
+      obligationRepo.list(userId),
+    ]).then(([prjs, cnts, accs, obls]) => {
       setProjects(prjs);
       setContacts(cnts);
       setAccounts(accs);
-      cachedQuickAddData = { userId, projects: prjs, contacts: cnts, accounts: accs };
+      setObligations(obls);
+      cachedQuickAddData = { userId, projects: prjs, contacts: cnts, accounts: accs, obligations: obls };
       if (accs.length > 0 && !accountId) {
         setAccountId(accs[0].id);
       }
     });
-  }, [isOpen, userId]);
+  }, [isOpen, userId, editingBill?.id, initialEntryType]);
 
   if (!isOpen) return null;
+
+  const openPayableBills = obligations.filter(
+    (o) =>
+      !o.isDeleted &&
+      o.direction === 'payable' &&
+      o.status !== 'voided' &&
+      o.status !== 'paid' &&
+      o.remainingAmountMinor > 0
+  );
+
+  const selectedBill =
+    entryType === 'payment' && selectedBillId
+      ? openPayableBills.find((b) => b.id === selectedBillId) ?? null
+      : null;
+
+  const isProjectLockedToBill = Boolean(selectedBill);
+  const isContactLockedToBill = Boolean(selectedBill && selectedBill.contactId);
+
+  const handleSelectBill = (billId: string) => {
+    setSelectedBillId(billId);
+    if (!billId) return;
+    const bill = openPayableBills.find((b) => b.id === billId);
+    if (!bill) return;
+
+    // Auto-fill bill-owned fields (Amount, Project, Contact) without touching Account, Date, Method, or Notes
+    const major = Money.toMajorString(bill.remainingAmountMinor);
+    setAmountStr(major.endsWith('.00') ? major.slice(0, -3) : major);
+    setProjectId(bill.projectId || '');
+    if (bill.contactId) {
+      setContactId(bill.contactId);
+    }
+  };
+
+  const paymentAmountMinorPreview = (() => {
+    const val = parseFloat(amountStr) || 0;
+    return val > 0 ? Money.fromMajor(val).minorUnits : 0;
+  })();
+
+  const billSettlementHint = (() => {
+    if (!selectedBill || paymentAmountMinorPreview <= 0) return null;
+    const rem = selectedBill.remainingAmountMinor;
+    if (paymentAmountMinorPreview < rem) {
+      return {
+        text: `Partial — ${Money.format(rem - paymentAmountMinorPreview)} will remain`,
+        tone: 'text-amber-600 dark:text-amber-400',
+      };
+    }
+    if (paymentAmountMinorPreview === rem) {
+      return {
+        text: 'Full settlement — marks bill Paid',
+        tone: 'text-emerald-600 dark:text-emerald-400',
+      };
+    }
+    return {
+      text: `Exceeds remaining balance by ${Money.format(paymentAmountMinorPreview - rem)}`,
+      tone: 'text-rose-600 dark:text-rose-400',
+    };
+  })();
 
   // Auto-calculate Total Amount from Qty x Unit Price on the Bill tab using integer minor units
   const syncBillTotal = (nextQtyStr: string, nextUnitPriceStr: string) => {
@@ -175,43 +287,104 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
         if (!title.trim() && !itemName.trim()) throw new Error('Obligation title is required.');
         const unitPriceVal = Number(unitPriceStr) || 0;
         const unitPriceMinor = unitPriceVal > 0 ? Money.fromMajor(unitPriceVal).minorUnits : 0;
-        const qtyVal = Number(quantity) || 1;
-        const totalMinor = amountMinor > 0 ? amountMinor : Math.round(unitPriceMinor * qtyVal);
+        const qtyVal = Number(quantity) || 0;
+        const totalMinor =
+          amountMinor > 0 ? amountMinor : Math.round(unitPriceMinor * (qtyVal || 1));
 
         if (totalMinor <= 0) throw new Error('Total obligation amount must be greater than zero.');
 
-        const obl = DomainUseCases.createPurchaseObligation({
-          projectId: projectId || undefined,
-          contactId: contactId || undefined,
-          title: title.trim() || `${quantity} ${unit} of ${itemName}`,
-          date,
-          totalAmountMinor: totalMinor,
-          materialDetails: itemName.trim() ? {
-            itemName: itemName.trim(),
-            quantity: qtyVal,
-            unit: unit.trim() || 'units',
-            unitPriceMinor,
-          } : undefined,
-          notes: notes.trim() || undefined,
-        });
+        const hasMaterialDetails =
+          qtyVal > 0 || unitPriceMinor > 0 || Boolean(unit.trim());
+        const materialDetails = hasMaterialDetails
+          ? {
+              itemName: (itemName.trim() || title.trim()),
+              quantity: qtyVal > 0 ? qtyVal : 1,
+              unit: unit.trim() || 'units',
+              unitPriceMinor,
+            }
+          : undefined;
 
-        await awaitLocalCommit(obligationRepo.create(userId, obl));
+        if (editingBill) {
+          const alreadyPaidMinor = editingBill.allocatedAmountMinor || 0;
+          if (totalMinor < alreadyPaidMinor) {
+            throw new Error(
+              `Total cannot be less than the ${Money.format(alreadyPaidMinor)} already paid toward this bill.`
+            );
+          }
+
+          const newRemainingMinor = totalMinor - alreadyPaidMinor;
+          const newStatus: ObligationStatus =
+            newRemainingMinor === 0
+              ? 'paid'
+              : alreadyPaidMinor > 0
+                ? 'partially_paid'
+                : 'unpaid';
+
+          await awaitLocalCommit(
+            obligationRepo.update(userId, editingBill.id, {
+              title: title.trim() || `${qtyVal || 1} ${unit.trim() || 'units'} of ${itemName.trim()}`,
+              date: date || editingBill.date,
+              totalAmountMinor: totalMinor,
+              remainingAmountMinor: newRemainingMinor,
+              status: newStatus,
+              projectId: projectId || undefined,
+              contactId: contactId || undefined,
+              materialDetails,
+              notes: notes.trim() || undefined,
+            })
+          );
+        } else {
+          const obl = DomainUseCases.createPurchaseObligation({
+            projectId: projectId || undefined,
+            contactId: contactId || undefined,
+            title: title.trim() || `${qtyVal || 1} ${unit} of ${itemName}`,
+            date,
+            totalAmountMinor: totalMinor,
+            materialDetails,
+            notes: notes.trim() || undefined,
+          });
+
+          await awaitLocalCommit(obligationRepo.create(userId, obl));
+        }
       } else if (entryType === 'payment') {
         if (!accountId) throw new Error('Please select an account for payment.');
-        if (!contactId) throw new Error('Please select a recipient contact.');
+        if (!contactId && !selectedBill) throw new Error('Please select a recipient contact.');
+        if (selectedBill && amountMinor > selectedBill.remainingAmountMinor) {
+          throw new Error(
+            `Payment cannot exceed the remaining balance of ${Money.format(selectedBill.remainingAmountMinor)}.`
+          );
+        }
 
-        const pmt = DomainUseCases.recordOutgoingPayment({
+        const basePayment = DomainUseCases.recordOutgoingPayment({
           accountId,
-          contactId,
-          projectId: projectId || undefined,
+          contactId: contactId || selectedBill?.contactId || undefined,
+          projectId: selectedBill ? selectedBill.projectId : projectId || undefined,
           amountMinor,
           date,
           method: paymentMethod,
-          notes: notes.trim() || undefined,
+          notes: selectedBill
+            ? notes.trim() || `Settlement for ${selectedBill.title}`
+            : combinedNotes,
         });
 
         const acc = accounts.find((a) => a.id === accountId);
-        const writes: Promise<unknown>[] = [paymentRepo.create(userId, pmt)];
+        const writes: Promise<unknown>[] = [];
+
+        if (selectedBill) {
+          const { updatedObligation, updatedPayment, allocation } =
+            DomainUseCases.allocatePayment(selectedBill, basePayment);
+          writes.push(paymentRepo.create(userId, updatedPayment, [allocation]));
+          writes.push(
+            obligationRepo.update(userId, updatedObligation.id, {
+              allocatedAmountMinor: updatedObligation.allocatedAmountMinor,
+              remainingAmountMinor: updatedObligation.remainingAmountMinor,
+              status: updatedObligation.status,
+            })
+          );
+        } else {
+          writes.push(paymentRepo.create(userId, basePayment));
+        }
+
         if (acc) {
           writes.push(accountRepo.updateBalance(userId, accountId, acc.currentBalanceMinor - amountMinor));
         }
@@ -222,10 +395,17 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
       setAmountStr('');
       setNotes('');
       setCategoryId('');
+      setSelectedBillId('');
       setItemName('');
       setUnitPriceStr('');
       showSnackbar({
-        message: entryType === 'income' ? 'Funds added to account.' : 'Entry recorded.',
+        message: isEditingBill
+          ? 'Bill updated.'
+          : entryType === 'income'
+            ? 'Funds added to account.'
+            : entryType === 'payment' && selectedBill
+              ? 'Bill payment recorded.'
+              : 'Entry recorded.',
         tone: 'success',
       });
       onSuccess?.();
@@ -242,7 +422,13 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/20 dark:bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto overflow-x-hidden overscroll-none">
         <div className="w-full max-w-md p-4 sm:p-6 rounded-3xl space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-extrabold text-[var(--lg-foreground)]">Record Financial Entry</h3>
+            <h3 className="text-base font-extrabold text-[var(--lg-foreground)]">
+              {isEditingBill
+                ? 'Edit Bill'
+                : isTabLocked && entryType === 'obligation'
+                  ? 'New Bill'
+                  : 'Record Financial Entry'}
+            </h3>
             <button
               onClick={onClose}
               className="p-1 rounded-full text-[var(--lg-muted)] hover:text-[var(--lg-foreground)]"
@@ -252,30 +438,28 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
           </div>
 
           {/* Glisse Segmented Control for entry type */}
-          <div className="flex justify-center w-full py-2 overflow-hidden">
-            <SegmentedControl
-              items={[
-                { value: 'expense', label: 'Expense' },
-                { value: 'income', label: 'Income' },
-                { value: 'obligation', label: 'Bill' },
-                { value: 'payment', label: 'Payment' },
-              ]}
-              value={entryType}
-              onValueChange={(val) => {
-                if (val) setEntryType(val as EntryType);
-              }}
-              style={{ '--lg-tab-width': 'clamp(76px, 21vw, 94px)' } as React.CSSProperties}
-            />
-          </div>
+          {!isTabLocked && (
+            <div className="flex justify-center w-full py-2 overflow-hidden">
+              <SegmentedControl
+                items={[
+                  { value: 'expense', label: 'Expense' },
+                  { value: 'income', label: 'Income' },
+                  { value: 'obligation', label: 'Bill' },
+                  { value: 'payment', label: 'Payment' },
+                ]}
+                value={entryType}
+                onValueChange={(val) => {
+                  if (val) setEntryType(val as EntryType);
+                }}
+                style={{ '--lg-tab-width': 'clamp(76px, 21vw, 94px)' } as React.CSSProperties}
+              />
+            </div>
+          )}
 
-        {error && (
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-600 dark:text-rose-400 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+        <div>
+          <FormErrorBanner error={error} onDismiss={() => setError(null)} />
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           {/* Obligation / Material Details (persistent DOM for 0ms lag-free tab switching) */}
           <div className={entryType === 'obligation' ? 'space-y-3' : 'hidden'}>
             <div>
@@ -339,8 +523,8 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
             </div>
           </div>
 
-          {/* Standard Memo for Expense and Payment */}
-          <div className={entryType !== 'obligation' ? 'block' : 'hidden'}>
+          {/* Standard Memo for Expense, Income, and Standalone Payment (hidden for Bills & Bill Payments) */}
+          <div className={entryType !== 'obligation' && !selectedBill ? 'block' : 'hidden'}>
             <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
               Description / Memo *
             </label>
@@ -348,12 +532,14 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
               placeholder={
                 entryType === 'income'
                   ? 'Salary, advance'
-                  : 'Fuel, groceries'
+                  : entryType === 'payment'
+                    ? 'Contractor advance, deposit'
+                    : 'Fuel, groceries'
               }
               value={title}
               onValueChange={setTitle}
               className="!max-w-none"
-              required={entryType !== 'obligation'}
+              required={entryType !== 'obligation' && !selectedBill}
             />
           </div>
 
@@ -386,6 +572,30 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
             </div>
           </div>
 
+          {/* Apply to Open Bill (Payment tab only) */}
+          <div className={entryType === 'payment' ? 'block space-y-1' : 'hidden'}>
+            <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider">
+              Apply to Open Bill
+            </label>
+            <select
+              value={selectedBillId}
+              onChange={(e) => handleSelectBill(e.target.value)}
+              className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
+            >
+              <option value="">Select</option>
+              {openPayableBills.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.title} — {Money.format(b.remainingAmountMinor)} left
+                </option>
+              ))}
+            </select>
+            {billSettlementHint && (
+              <p className={`text-[11px] font-semibold ${billSettlementHint.tone}`}>
+                {billSettlementHint.text}
+              </p>
+            )}
+          </div>
+
           {/* Project and Account */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -395,7 +605,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
               <select
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
-                className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
+                disabled={isProjectLockedToBill}
+                className={`w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none ${
+                  isProjectLockedToBill ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                }`}
               >
                 <option value="">Personal</option>
                 {projects.map((p) => (
@@ -404,6 +617,9 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                   </option>
                 ))}
               </select>
+              {isProjectLockedToBill && (
+                <p className="text-[10px] text-[var(--lg-muted)] mt-1">Matched to selected bill</p>
+              )}
             </div>
 
             <div className={entryType !== 'obligation' ? 'block' : 'hidden'}>
@@ -466,13 +682,16 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
           <div className={entryType === 'payment' ? 'grid grid-cols-2 gap-3' : 'hidden'}>
             <div>
               <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
-                Disbursed To Contact *
+                Disbursed To Contact {selectedBill ? '' : '*'}
               </label>
               <select
                 value={contactId}
                 onChange={(e) => setContactId(e.target.value)}
-                className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
-                required={entryType === 'payment'}
+                disabled={isContactLockedToBill}
+                className={`w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none ${
+                  isContactLockedToBill ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                }`}
+                required={entryType === 'payment' && !selectedBill}
               >
                 <option value="">Select recipient</option>
                 {contacts.map((c) => (
@@ -481,6 +700,9 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                   </option>
                 ))}
               </select>
+              {isContactLockedToBill && (
+                <p className="text-[10px] text-[var(--lg-muted)] mt-1">Matched to selected bill</p>
+              )}
             </div>
 
             <div>
@@ -530,13 +752,18 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
               className="!text-xs font-semibold"
             >
               {submitting
-                ? 'Recording...'
-                : entryType === 'income'
-                  ? 'Add Funds'
-                  : 'Record Entry'}
+                ? isEditingBill
+                  ? 'Saving...'
+                  : 'Recording...'
+                : isEditingBill
+                  ? 'Save Changes'
+                  : entryType === 'income'
+                    ? 'Add Funds'
+                    : 'Record Entry'}
             </Button>
           </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   </ModalPortal>
