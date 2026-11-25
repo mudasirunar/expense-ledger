@@ -78,7 +78,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
           className="w-full max-w-md p-4 sm:p-6 rounded-3xl space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between pb-3 border-b border-[var(--lg-separator)]">
+          <div className="flex items-start justify-between">
             <div>
               <h3 className="text-lg font-black text-[var(--lg-foreground)]">
                 {contact.name}
@@ -176,7 +176,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
             )}
           </div>
 
-          <div className="flex justify-end pt-2 border-t border-[var(--lg-separator)]">
+          <div className="flex justify-end pt-1">
             <Button
               variant="glass"
               onClick={onClose}

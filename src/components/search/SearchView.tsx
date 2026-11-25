@@ -588,11 +588,11 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
                   ))}
 
                   {recentSearches.length > INITIAL_RECENT_VISIBLE && (
-                    <div className="pt-2 flex justify-center">
+                    <div className="pt-1.5 flex justify-start">
                       <button
                         type="button"
                         onClick={() => setShowAllRecent((prev) => !prev)}
-                        className="text-xs font-semibold text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full active:bg-[var(--lg-glass)] transition-colors"
+                        className="text-xs font-semibold text-blue-600 dark:text-blue-400 px-1 -mx-1 py-1 rounded-lg active:bg-[var(--lg-glass)] transition-colors"
                       >
                         {showAllRecent ? 'Show Less' : 'Show All'}
                       </button>

@@ -622,6 +622,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [pinSelectedProject, setPinSelectedProject] = useState<boolean>(true);
   const chipRowRef = useRef<HTMLDivElement>(null);
   const chipButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const projectRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const pendingAnchorRef = useRef<{
+    projectId: string;
+    prevTop: number;
+    scroller: HTMLElement | null;
+  } | null>(null);
 
   const [rawAccounts, setRawAccounts] = useState<Account[]>(() =>
     hasWarmCache ? cachedDashboard!.accounts : []
@@ -800,6 +806,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       if (!exists) setScopeFilter('all');
     }
   }, [rawProjects, scopeFilter]);
+
+  // Anchor-lock a tapped Project Budget Health row before paint so toggling scopeFilter causes 0px jump
+  useLayoutEffect(() => {
+    const anchor = pendingAnchorRef.current;
+    if (!anchor) return;
+    pendingAnchorRef.current = null;
+
+    const rowEl = projectRowRefs.current.get(anchor.projectId);
+    if (!rowEl) return;
+    const delta = rowEl.getBoundingClientRect().top - anchor.prevTop;
+    if (Math.abs(delta) < 0.5) return;
+
+    if (anchor.scroller) {
+      anchor.scroller.scrollTop += delta;
+    } else {
+      window.scrollBy(0, delta);
+    }
+  }, [scopeFilter]);
 
   // Smoothly center the selected scope chip horizontally (without affecting vertical scroll)
   useEffect(() => {
@@ -1356,7 +1380,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Active Projects Budget Health: Top 5 Projects (Flat-on-Screen) */}
       {analytics.projectHealth.length > 0 && (
-        <section className="pt-2 space-y-3">
+        <section className="pb-5 border-b border-[var(--lg-separator)] space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold tracking-wider text-[var(--lg-muted)] uppercase">
               Project Budget Health
@@ -1382,7 +1406,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               return (
                 <div
                   key={prj.id}
+                  ref={(el) => {
+                    if (el) projectRowRefs.current.set(prj.id, el);
+                    else projectRowRefs.current.delete(prj.id);
+                  }}
                   onClick={() => {
+                    const rowEl = projectRowRefs.current.get(prj.id);
+                    if (rowEl) {
+                      pendingAnchorRef.current = {
+                        projectId: prj.id,
+                        prevTop: rowEl.getBoundingClientRect().top,
+                        scroller: rowEl.closest('.scroll-container') as HTMLElement | null,
+                      };
+                    }
                     setPinSelectedProject(false);
                     setScopeFilter(isSelected ? 'all' : prj.id);
                   }}

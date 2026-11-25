@@ -17,6 +17,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
+import { AccountDetailModal } from './AccountDetailModal';
 import { registerMemoryCacheClearer, awaitLocalCommit } from '@/data/sync/dataWipeService';
 import { generateEntityId } from '@/domain/utils/id';
 
@@ -41,6 +42,7 @@ export const AccountsView: React.FC = () => {
   });
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
   const [isTransferOpen, setIsTransferOpen] = useState<boolean>(false);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
   // New account form state
   const [name, setName] = useState<string>('');
@@ -306,7 +308,11 @@ export const AccountsView: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {accounts.map((acc) => (
-            <Glass key={acc.id} className="p-4 sm:p-5 rounded-2xl space-y-3">
+            <Glass
+              key={acc.id}
+              onClick={() => setSelectedAccount(acc)}
+              className="p-4 sm:p-5 rounded-2xl space-y-3 cursor-pointer active:scale-[0.99] transition-transform"
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-[var(--lg-muted)]/10 flex-shrink-0">
@@ -609,6 +615,12 @@ export const AccountsView: React.FC = () => {
         </div>
       </ModalPortal>
     )}
+
+      {/* Account Detail Modal */}
+      <AccountDetailModal
+        account={selectedAccount}
+        onClose={() => setSelectedAccount(null)}
+      />
     </div>
   );
 };

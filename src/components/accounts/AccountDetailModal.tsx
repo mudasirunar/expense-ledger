@@ -64,7 +64,7 @@ export const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ account,
           className="w-full max-w-md p-4 sm:p-6 rounded-3xl space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto box-border bg-[var(--lg-surface)] border border-[var(--lg-surface-edge)] backdrop-blur-2xl"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between pb-3 border-b border-[var(--lg-separator)]">
+          <div className="flex items-start justify-between">
             <div className="min-w-0">
               <span
                 className={`text-[9px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${getAccountTypeBadge(account.type)}`}
@@ -136,7 +136,7 @@ export const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ account,
             )}
           </div>
 
-          <div className="flex justify-end pt-2 border-t border-[var(--lg-separator)]">
+          <div className="flex justify-end pt-1">
             <Button
               variant="glass"
               onClick={onClose}
