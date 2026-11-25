@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 :root {
+  --top-spacer: env(safe-area-inset-top, 0px);
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
@@ -58,6 +59,10 @@ html.dark .dark\:bg-background {
 
   .pwa-top-spacer {
     height: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+  }
+
+  :root {
+    --top-spacer: calc(env(safe-area-inset-top, 0px) + 12px);
   }
 }
 

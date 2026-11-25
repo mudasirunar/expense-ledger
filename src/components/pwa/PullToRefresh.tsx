@@ -9,12 +9,39 @@ interface PullToRefreshProps {
 
 const PULL_THRESHOLD = 64; // px needed to engage refresh trigger
 const MAX_PULL = 96; // max travel distance with elastic rubber-band damping
-const REFRESH_HEIGHT = 48; // px height held while actively refreshing
+const REFRESH_HEIGHT = 72; // px height held while actively refreshing
 
 export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefresh }) => {
   const { triggerManualRefresh, isRefreshing } = useSync();
-  const [pullDistance, setPullDistance] = useState<number>(0);
+  const [pullDistance, setPullDistanceState] = useState<number>(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const indicatorRef = useRef<HTMLDivElement>(null);
+
+  // Finger-driven motion bypasses React: position/opacity/scale are written straight to the DOM
+  // (GPU transforms only, no layout), so dragging tracks the finger at full frame rate.
+  // React state is kept only for the icon / label / ring details.
+  const setPullDistance = useCallback((d: number) => {
+    const dragging = isDraggingRef.current;
+    const ease = 'transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease-out';
+    const content = contentRef.current;
+    if (content) {
+      content.style.transition = dragging ? 'none' : ease;
+      content.style.transform = d > 0 ? `translate3d(0, ${d}px, 0)` : '';
+    }
+    const ind = indicatorRef.current;
+    if (ind) {
+      const p = Math.min(1, d / PULL_THRESHOLD);
+      ind.style.transition = dragging ? 'none' : ease;
+      // Rides just above the content's top edge (bottom-anchored), fading in only once it is
+      // fully below the status-bar safe area, then sits with equal breathing room above and below.
+      ind.style.opacity = d > 34 ? String(Math.min(1, (d - 34) / 22)) : '0';
+      ind.style.transform = `translate3d(0, ${d}px, 0) scale(${0.7 + 0.3 * p})`;
+    }
+    setPullDistanceState(d);
+  }, []);
   const [pullStatus, setPullStatus] = useState<'idle' | 'pulling' | 'threshold' | 'refreshing' | 'complete'>('idle');
+  // Keeps the green check visible while the indicator slides back up after a finished refresh
+  const [closingComplete, setClosingComplete] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const startYRef = useRef<number>(0);
@@ -39,7 +66,7 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
       }
       setPullStatus('complete');
       setTimeout(() => {
-        setPullStatus('idle');
+        setClosingComplete(true); setPullStatus('idle'); setTimeout(() => setClosingComplete(false), 340);
         setPullDistance(0);
         pullDistanceRef.current = 0;
       }, 300);
@@ -174,7 +201,7 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
     } else if (!isRefreshing && pullStatus === 'refreshing') {
       setPullStatus('complete');
       setTimeout(() => {
-        setPullStatus('idle');
+        setClosingComplete(true); setPullStatus('idle'); setTimeout(() => setClosingComplete(false), 340);
         setPullDistance(0);
         pullDistanceRef.current = 0;
       }, 300);
@@ -182,63 +209,87 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, onRefres
   }, [isRefreshing, pullStatus]);
 
   const progress = Math.min(1, pullDistance / PULL_THRESHOLD);
+  const isBusy = pullStatus === 'refreshing';
+  const showComplete = pullStatus === 'complete' || (closingComplete && pullStatus === 'idle');
+  const RING_R = 12;
+  const RING_C = 2 * Math.PI * RING_R;
 
   return (
     <div 
       ref={containerRef}
       className="relative flex-1 w-full overflow-y-auto scroll-container overscroll-y-contain select-none"
     >
-      {/* Floating Apple Liquid Glass Pull Indicator */}
-      <div 
-        className="pointer-events-none absolute left-0 right-0 top-0 flex justify-center z-20 pt-2"
+      {/* Status-bar safe area (scrolls away with the content, never covered by the indicator) */}
+      <div
+        className="w-full pointer-events-none"
+        style={{ height: 'var(--top-spacer, env(safe-area-inset-top, 0px))' }}
+      />
+
+      {/* Pull indicator: lives in the gap revealed BELOW the status bar, centered in that gap */}
+      <div
+        className="pointer-events-none absolute left-0 right-0 z-20"
         style={{
-          transform: `translate3d(0, ${Math.max(0, pullDistance - 40)}px, 0)`,
-          opacity: pullDistance > 10 ? Math.min(1, (pullDistance - 10) / 25) : 0,
-          transition: isDragging 
-            ? 'none' 
-            : 'transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-out',
+          top: 'var(--top-spacer, env(safe-area-inset-top, 0px))',
+          height: 0,
+          // Clip anything above the safe-area line so the indicator never slides under the status bar
+          clipPath: 'inset(0 0 -240px 0)',
         }}
+        aria-hidden={pullStatus === 'idle'}
       >
-        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--lg-glass)] backdrop-blur-2xl border border-[var(--lg-edge)] shadow-lg text-xs font-semibold text-[var(--lg-foreground)]">
-          {pullStatus === 'pulling' && (
-            <>
-              <ArrowDown 
-                className="w-3.5 h-3.5 text-blue-500 transition-transform duration-75" 
-                style={{ transform: `rotate(${progress * 180}deg)` }}
+        <div
+          ref={indicatorRef}
+          className="absolute left-0 right-0 bottom-2.5 flex flex-col items-center justify-center gap-1 will-change-transform"
+          style={{ opacity: 0, transformOrigin: '50% 100%' }}
+        >
+          <div className="relative w-9 h-9 rounded-full bg-[var(--lg-glass)] backdrop-blur-xl border border-[var(--lg-edge)] shadow-lg flex items-center justify-center">
+            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36" fill="none">
+              <circle cx="18" cy="18" r={RING_R} stroke="currentColor" strokeWidth="2.5" className="text-[var(--lg-muted)] opacity-25" />
+              <circle
+                cx="18"
+                cy="18"
+                r={RING_R}
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                className={showComplete ? 'text-emerald-500' : 'text-blue-500'}
+                strokeDasharray={RING_C}
+                strokeDashoffset={
+                  showComplete ? 0 : isBusy ? RING_C * 0.7 : RING_C * (1 - progress)
+                }
+                style={{
+                  transition: 'stroke-dashoffset 0.25s ease-out',
+                  ...(isBusy ? { transformOrigin: '50% 50%', animation: 'spin 0.9s linear infinite' } : {}),
+                }}
               />
-              <span className="text-[var(--lg-muted)]">Pull to refresh</span>
-            </>
-          )}
-          {pullStatus === 'threshold' && (
-            <>
-              <ArrowDown className="w-3.5 h-3.5 text-blue-500 rotate-180 transition-transform duration-150" />
-              <span className="text-blue-500 font-bold">Release to refresh</span>
-            </>
-          )}
-          {pullStatus === 'refreshing' && (
-            <>
-              <RotateCw className="w-3.5 h-3.5 animate-spin text-blue-500" />
-              <span>Updating ledger...</span>
-            </>
-          )}
-          {pullStatus === 'complete' && (
-            <>
-              <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[2.5]" />
-              <span className="text-emerald-500 font-bold">Updated</span>
-            </>
-          )}
+            </svg>
+            {showComplete ? (
+              <Check className="w-4 h-4 text-emerald-500 stroke-[2.5]" />
+            ) : isBusy ? (
+              <RotateCw className="w-3.5 h-3.5 text-blue-500 opacity-0" />
+            ) : (
+              <ArrowDown
+                className="w-4 h-4 text-blue-500"
+                style={{
+                  transform: `rotate(${pullStatus === 'threshold' ? 180 : progress * 180}deg)`,
+                  transition: isDragging ? 'transform 0.12s ease-out' : 'transform 0.2s ease-out',
+                }}
+              />
+            )}
+          </div>
+          <span className="h-[13px] text-[11px] font-semibold text-[var(--lg-muted)] leading-[13px] transition-opacity duration-200" style={{ opacity: pullDistance >= 56 ? 1 : 0 }}>
+              {pullStatus === 'refreshing'
+                ? 'Updating…'
+                : showComplete
+                  ? 'Updated'
+                  : pullStatus === 'threshold'
+                    ? 'Release to refresh'
+                    : 'Pull to refresh'}
+            </span>
         </div>
       </div>
 
-      {/* Main Content with Direct Hardware-Accelerated Translation */}
-      <div
-        style={{
-          transform: pullDistance > 0 ? `translate3d(0, ${pullDistance}px, 0)` : undefined,
-          transition: isDragging 
-            ? 'none' 
-            : 'transform 0.26s cubic-bezier(0.16, 1, 0.3, 1)',
-        }}
-      >
+      {/* Main Content: translated directly by setPullDistance (see above) */}
+      <div ref={contentRef} className="will-change-transform">
         {children}
       </div>
     </div>
