@@ -183,7 +183,7 @@ export const CategoryBudgetModal: React.FC<CategoryBudgetModalProps> = ({
               <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1.5">
                 Reset Period
               </label>
-              <div className="flex justify-center w-full">
+              <div className="flex justify-start w-full">
                 <SegmentedControl
                   items={[
                     { value: 'monthly', label: 'Monthly' },
