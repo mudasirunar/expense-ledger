@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
+  BarChart3,
   LogOut,
   Trash2,
   Download,
@@ -36,7 +37,11 @@ const COLLECTION_LABELS: Record<UserCollectionName, string> = {
   budgets: 'Budgets',
 };
 
-export const ProfileView: React.FC = () => {
+interface ProfileViewProps {
+  onOpenReports?: () => void;
+}
+
+export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenReports }) => {
   const { user, signOutUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const { showSnackbar } = useSnackbar();
@@ -270,6 +275,24 @@ export const ProfileView: React.FC = () => {
               <ThemePreviewPicker value={theme} onChange={setTheme} />
             </Glass>
           </section>
+
+          {/* Reports Section */}
+          {onOpenReports && (
+            <section className="space-y-2.5">
+              <h3 className="text-xs font-bold tracking-wider text-[var(--lg-muted)] uppercase px-0.5">
+                Reports
+              </h3>
+
+              <Button
+                variant="glass"
+                onClick={onOpenReports}
+                className="!w-full !py-3 !rounded-[24px] font-bold !text-[var(--lg-foreground)] flex items-center justify-center gap-2 transition-all"
+                icon={<BarChart3 className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
+              >
+                Financial Reports
+              </Button>
+            </section>
+          )}
 
           {/* Data Section */}
           <section className="space-y-2.5">

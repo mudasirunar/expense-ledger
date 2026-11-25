@@ -13,6 +13,11 @@ import {
 import { Money } from '@/domain/accounting/money';
 import { computeDashboardAnalytics } from '@/domain/accounting/dashboardAnalytics';
 import {
+  FinancialReportBundle,
+  ReportPeriod,
+  computeFinancialReports,
+} from '@/domain/accounting/financialReports';
+import {
   DELETED_RECORDS_COLLECTION,
   USER_DATA_COLLECTIONS,
   clearAllMemoryCaches,
@@ -624,19 +629,9 @@ export function buildLedgerWorkbookSheets(data: BackupDataPayload): {
   };
 }
 
-/**
- * Exports all active ledger data as a clean, styled multi-sheet Excel workbook (.xlsx)
- * using our warm light-mode ledger cream palette for clear table & heading separation.
- */
-export async function exportLedgerExcel(
-  userId: string
-): Promise<{ rowCount: number; filename: string; outcome: FileTransferOutcome }> {
-  const [data, xlsxMod] = await Promise.all([
-    fetchAllActiveData(userId),
-    import('xlsx-js-style'),
-  ]);
+async function renderStyledWorkbookBytes(sheets: ExcelSheetData[]): Promise<Uint8Array> {
+  const xlsxMod = await import('xlsx-js-style');
   const XLSX = xlsxMod.default ?? xlsxMod;
-  const { sheets, totalEntries } = buildLedgerWorkbookSheets(data);
 
   // Clean warm ledger-cream styles matching app light mode (#E2DDD5 / #D8D1C5)
   const titleStyle = {
@@ -687,7 +682,6 @@ export async function exportLedgerExcel(
     const headerSet = new Set(sheet.headerRowIndices);
     const colCount = sheet.rows.reduce((max, r) => Math.max(max, r.length), 0);
 
-    // Apply row heights & cell styles cleanly
     const rowHeights: Array<{ hpt?: number }> = [];
     for (let r = 0; r < sheet.rows.length; r++) {
       const row = sheet.rows[r];
@@ -712,14 +706,19 @@ export async function exportLedgerExcel(
         if (isTitle) {
           cell.s = titleStyle;
         } else if (isHeader) {
-          const isNumericHeader = typeof cell.v === 'string' && (cell.v.includes('(PKR)') || cell.v === 'Qty' || cell.v === 'Used %');
+          const isNumericHeader =
+            typeof cell.v === 'string' &&
+            (cell.v.includes('(PKR)') ||
+              cell.v === 'Qty' ||
+              cell.v === 'Used %' ||
+              cell.v === 'Share %' ||
+              cell.v === 'Entries');
           cell.s = isNumericHeader
             ? { ...headerStyle, alignment: { vertical: 'center', horizontal: 'right' } }
             : headerStyle;
         } else if (typeof cell.v === 'number') {
-          // Check if this column's header is 'Qty'
           const colHeader = sheet.rows[sheet.headerRowIndices[0]]?.[c];
-          cell.s = colHeader === 'Qty' ? dataQtyStyle : dataNumberStyle;
+          cell.s = colHeader === 'Qty' || colHeader === 'Entries' ? dataQtyStyle : dataNumberStyle;
         } else {
           cell.s = dataTextStyle;
         }
@@ -728,7 +727,6 @@ export async function exportLedgerExcel(
 
     ws['!rows'] = rowHeights;
 
-    // Auto-size columns with generous padding
     ws['!cols'] = Array.from({ length: colCount }, (_, colIdx) => {
       let maxLen = 12;
       for (const row of sheet.rows) {
@@ -744,7 +742,19 @@ export async function exportLedgerExcel(
   }
 
   const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
-  const bytes = new Uint8Array(buffer);
+  return new Uint8Array(buffer);
+}
+
+/**
+ * Exports all active ledger data as a clean, styled multi-sheet Excel workbook (.xlsx)
+ * using our warm light-mode ledger cream palette for clear table & heading separation.
+ */
+export async function exportLedgerExcel(
+  userId: string
+): Promise<{ rowCount: number; filename: string; outcome: FileTransferOutcome }> {
+  const data = await fetchAllActiveData(userId);
+  const { sheets, totalEntries } = buildLedgerWorkbookSheets(data);
+  const bytes = await renderStyledWorkbookBytes(sheets);
   const dateStamp = new Date().toISOString().slice(0, 10);
   const filename = `expense-ledger-${dateStamp}.xlsx`;
 
@@ -755,6 +765,179 @@ export async function exportLedgerExcel(
   );
 
   return { rowCount: totalEntries, filename, outcome };
+}
+
+/**
+ * Builds 3 executive accounting statement sheets (Profit & Loss, Cash Flow, Project Costs)
+ * for a given FinancialReportBundle.
+ */
+export function buildFinancialReportWorkbookSheets(
+  report: FinancialReportBundle
+): ExcelSheetData[] {
+  const exportedDate = new Date().toISOString().slice(0, 10);
+
+  // 1. Profit & Loss Sheet
+  const pnlRows: (string | number)[][] = [
+    ['Profit & Loss Statement', `${report.periodLabel} (${report.periodRangeLabel})`],
+    ['Generated On', exportedDate],
+    [],
+    ['Summary Metric', 'Amount (PKR)'],
+    ['Total Revenue / Income', toExcelAmount(report.pnl.totalIncomeMinor)],
+    ['Direct Expenses', toExcelAmount(report.pnl.directExpenseMinor)],
+    ['Bills Incurred (Accrual)', toExcelAmount(report.pnl.billsIncurredMinor)],
+    ['Total Expenses', toExcelAmount(report.pnl.totalExpenseMinor)],
+    ['Net Profit / (Loss)', toExcelAmount(report.pnl.netProfitMinor)],
+    [
+      'Profit Margin',
+      report.pnl.profitMarginPct !== null ? `${report.pnl.profitMarginPct}%` : 'N/A',
+    ],
+  ];
+  const pnlHeaderRows = [3];
+
+  if (report.pnl.incomeLines.length > 0) {
+    pnlRows.push([]);
+    pnlHeaderRows.push(pnlRows.length);
+    pnlRows.push(['Income Source', 'Scope', 'Entries', 'Share %', 'Amount (PKR)']);
+    for (const line of report.pnl.incomeLines) {
+      pnlRows.push([
+        line.label,
+        formatPrettyLabel(line.scope),
+        line.count,
+        `${line.sharePct}%`,
+        toExcelAmount(line.amountMinor),
+      ]);
+    }
+  }
+
+  if (report.pnl.expenseLines.length > 0) {
+    pnlRows.push([]);
+    pnlHeaderRows.push(pnlRows.length);
+    pnlRows.push(['Expense Category', 'Scope', 'Entries', 'Share %', 'Amount (PKR)']);
+    for (const line of report.pnl.expenseLines) {
+      pnlRows.push([
+        line.label,
+        formatPrettyLabel(line.scope),
+        line.count,
+        `${line.sharePct}%`,
+        toExcelAmount(line.amountMinor),
+      ]);
+    }
+  }
+
+  // 2. Cash Flow Sheet
+  const cfRows: (string | number)[][] = [
+    ['Cash Flow Statement', `${report.periodLabel} (${report.periodRangeLabel})`],
+    ['Generated On', exportedDate],
+    [],
+    ['Cash Flow Metric', 'Amount (PKR)'],
+    ['Total Cash In', toExcelAmount(report.cashFlow.totalCashInMinor)],
+    ['Total Cash Out', toExcelAmount(report.cashFlow.totalCashOutMinor)],
+    ['Net Cash Movement', toExcelAmount(report.cashFlow.netCashFlowMinor)],
+    ['Closing Liquid Cash', toExcelAmount(report.cashFlow.closingCashMinor)],
+    ['Internal Transfers Volume (Net 0)', toExcelAmount(report.cashFlow.transferVolumeMinor)],
+  ];
+  const cfHeaderRows = [3];
+
+  if (report.cashFlow.byAccount.length > 0) {
+    cfRows.push([]);
+    cfHeaderRows.push(cfRows.length);
+    cfRows.push([
+      'Account',
+      'Type',
+      'Cash In (PKR)',
+      'Cash Out (PKR)',
+      'Net Change (PKR)',
+      'Current Balance (PKR)',
+    ]);
+    for (const acc of report.cashFlow.byAccount) {
+      cfRows.push([
+        acc.accountName,
+        formatPrettyLabel(acc.accountType),
+        toExcelAmount(acc.cashInMinor),
+        toExcelAmount(acc.cashOutMinor),
+        toExcelAmount(acc.netChangeMinor),
+        toExcelAmount(acc.currentBalanceMinor),
+      ]);
+    }
+  }
+
+  // 3. Project Costs Sheet
+  const prjRows: (string | number)[][] = [
+    ['Project Cost Comparison', `${report.periodLabel} (${report.periodRangeLabel})`],
+    ['Generated On', exportedDate],
+    [],
+    [
+      'Project',
+      'Status',
+      'Budget (PKR)',
+      'Direct Expenses (PKR)',
+      'Bills Incurred (PKR)',
+      'Total Spent (PKR)',
+      'Remaining (PKR)',
+      'Used %',
+    ],
+  ];
+  for (const p of report.projectComparison.rows) {
+    prjRows.push([
+      p.projectName,
+      formatPrettyLabel(p.status),
+      toExcelAmount(p.budgetMinor),
+      toExcelAmount(p.directExpenseMinor),
+      toExcelAmount(p.billsIncurredMinor),
+      toExcelAmount(p.totalSpentMinor),
+      toExcelAmount(p.remainingMinor),
+      `${p.utilizationPct}%`,
+    ]);
+  }
+  if (report.projectComparison.rows.length > 0) {
+    prjRows.push([
+      'Total Portfolio',
+      '',
+      toExcelAmount(report.projectComparison.totalBudgetMinor),
+      toExcelAmount(report.projectComparison.totalDirectMinor),
+      toExcelAmount(report.projectComparison.totalBillsMinor),
+      toExcelAmount(report.projectComparison.totalSpentMinor),
+      toExcelAmount(report.projectComparison.totalRemainingMinor),
+      `${report.projectComparison.overallUtilizationPct}%`,
+    ]);
+  }
+
+  return [
+    { name: 'Profit & Loss', rows: pnlRows, headerRowIndices: pnlHeaderRows, titleRowIndex: 0 },
+    { name: 'Cash Flow', rows: cfRows, headerRowIndices: cfHeaderRows, titleRowIndex: 0 },
+    { name: 'Project Costs', rows: prjRows, headerRowIndices: [3], titleRowIndex: 0 },
+  ];
+}
+
+/**
+ * Exports a styled 3-sheet executive Financial Report (.xlsx) for the chosen period.
+ */
+export async function exportFinancialReportExcel(
+  userId: string,
+  period: ReportPeriod
+): Promise<{ filename: string; outcome: FileTransferOutcome }> {
+  const data = await fetchAllActiveData(userId);
+  const report = computeFinancialReports({
+    accounts: data.accounts,
+    projects: data.projects,
+    transactions: data.transactions,
+    obligations: data.obligations,
+    payments: data.payments,
+    period,
+  });
+
+  const sheets = buildFinancialReportWorkbookSheets(report);
+  const bytes = await renderStyledWorkbookBytes(sheets);
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  const filename = `financial-report-${period}-${dateStamp}.xlsx`;
+
+  const outcome = await triggerFileDownload(
+    bytes,
+    filename,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+
+  return { filename, outcome };
 }
 
 /**

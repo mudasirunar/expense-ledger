@@ -76,7 +76,7 @@
 - [x] Build standalone History screen (`#/history`) with Transaction Detail Bottom Sheet & 9:16 Bank Slip PNG receipt sharing (`receiptShareService.ts`).
 - [ ] Build normalized in-memory search across all financial entities.
 - [x] Build dedicated periodic Budget engine (Personal category budgets + 80%/90%/100% visual warning alerts + Quick Add category picker + live Dashboard section). *(Project budget 80%/90%/100% alerts also live on Dashboard)*
-- [ ] Build Financial Reports (P&L, Cash Flow, Project Cost Comparisons).
+- [x] Build Financial Reports standalone screen (`#/reports`: P&L, Cash Flow, Project Cost Comparisons + 3-sheet period Excel export, accessible from Profile).
 - [x] Build styled Multi-Sheet Excel Export (`.xlsx`: Summary, Expenses & Income, Transfers, Bills, Payments) + RFC-4180 CSV builder (`backupRestoreService.ts`).
 - [x] Build JSON backup export and validated Smart-Merge restore preview (`backupRestoreService.ts`).
 - [ ] Wire Bill Settlement UI (`Pay Bill` in History sheet & `Apply to Open Bill` in Quick Add Payment tab using `AllocationEngine`).
