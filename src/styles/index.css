@@ -82,6 +82,15 @@ html.dark .dark\:bg-background {
   display: none !important;
 }
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 #root {
   width: 100%;
   min-height: 100%;

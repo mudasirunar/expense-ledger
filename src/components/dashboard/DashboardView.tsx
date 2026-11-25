@@ -3,7 +3,6 @@ import {
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
-  Building2,
   ChevronRight,
   FileText,
   Landmark,
@@ -278,7 +277,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const hasWarmCache = Boolean(cachedDashboard && cachedDashboard.userId === userId);
 
-  const [timeFilter, setTimeFilter] = useState<DashboardTimeHorizon>('month');
+  const [timeFilter, setTimeFilter] = useState<DashboardTimeHorizon>('all');
   const [scopeFilter, setScopeFilter] = useState<DashboardScopeFilter>('all');
 
   const [rawAccounts, setRawAccounts] = useState<Account[]>(() =>
@@ -476,13 +475,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6 pb-10">
-      {/* Time Horizon Segmented Control (Unchanged: Today / This Month / All Time) */}
+      {/* Time Horizon Segmented Control: All Time (default) | This Month | Today */}
       <div className="flex justify-center w-full">
         <SegmentedControl
           items={[
-            { value: 'today', label: 'Today' },
-            { value: 'month', label: 'This Month' },
             { value: 'all', label: 'All Time' },
+            { value: 'month', label: 'This Month' },
+            { value: 'today', label: 'Today' },
           ]}
           value={timeFilter}
           onValueChange={(val) => {
@@ -493,7 +492,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Scope Context Pills (Combined / Personal / Individual Projects) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1">
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 -mx-1 px-1">
         {[
           { id: 'all', label: 'All' },
           { id: 'personal', label: 'Personal' },
@@ -517,40 +516,62 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         })}
       </div>
 
-      {/* Primary Hero Glass Card: Apple Wallet-inspired Net Cash Position (zero internal dividers) */}
+      {/* Primary Hero Glass Card: Dynamic per time horizon (All Time -> Net Cash Position; Month/Today -> Period Net Flow) */}
       <Glass className="p-5 rounded-3xl space-y-4">
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-bold tracking-wider text-[var(--lg-muted)] uppercase">
-              Net Cash Position
+              {timeFilter === 'all'
+                ? 'Net Cash Position'
+                : timeFilter === 'month'
+                  ? 'This Month Net'
+                  : "Today's Net"}
             </span>
 
-            {!loading && (analytics.totalInflowMinor > 0 || analytics.totalOutflowMinor > 0) && (
-              <span
-                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold tabular-nums ${
-                  analytics.netFlowMinor >= 0
-                    ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-rose-500/12 text-rose-600 dark:text-rose-400'
-                }`}
-              >
-                {analytics.netFlowMinor >= 0 ? '+' : ''}
-                {Money.format(analytics.netFlowMinor)}
-                {analytics.savingsRatePct !== null && (
-                  <span className="opacity-75">
-                    ({analytics.savingsRatePct >= 0 ? `${analytics.savingsRatePct}%` : `${analytics.savingsRatePct}%`})
+            {!loading &&
+              (timeFilter === 'all' ? (
+                (analytics.totalInflowMinor > 0 || analytics.totalOutflowMinor > 0) && (
+                  <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold tabular-nums ${
+                      analytics.netFlowMinor >= 0
+                        ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-rose-500/12 text-rose-600 dark:text-rose-400'
+                    }`}
+                  >
+                    {analytics.netFlowMinor >= 0 ? '+' : ''}
+                    {Money.format(analytics.netFlowMinor)}
+                    {analytics.savingsRatePct !== null && (
+                      <span className="opacity-75">({analytics.savingsRatePct}%)</span>
+                    )}
                   </span>
-                )}
-              </span>
-            )}
+                )
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tabular-nums bg-[var(--lg-muted)]/10 text-[var(--lg-muted)]">
+                  Cash {Money.format(analytics.totalCashMinor)}
+                </span>
+              ))}
           </div>
 
-          <div className="text-[32px] leading-tight font-black text-[var(--lg-foreground)] tabular-nums tracking-tight">
+          <div
+            className={`text-[32px] leading-tight font-black tabular-nums tracking-tight ${
+              timeFilter === 'all' || analytics.netFlowMinor === 0
+                ? 'text-[var(--lg-foreground)]'
+                : analytics.netFlowMinor > 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-rose-600 dark:text-rose-400'
+            }`}
+          >
             {loading ? (
-              <span className="inline-flex items-center">
+              <span className="inline-flex items-center text-[var(--lg-foreground)]">
                 Rs <LoadingDots size="md" />
               </span>
-            ) : (
+            ) : timeFilter === 'all' ? (
               Money.format(analytics.totalCashMinor)
+            ) : (
+              <>
+                {analytics.netFlowMinor > 0 ? '+' : ''}
+                {Money.format(analytics.netFlowMinor)}
+              </>
             )}
           </div>
         </div>
@@ -785,7 +806,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         )}
       </section>
 
-      {/* Active Projects Budget Health (Flat-on-Screen) */}
+      {/* Active Projects Budget Health: Top 5 Projects (Flat-on-Screen) */}
       {analytics.projectHealth.length > 0 && (
         <section className="pt-2 space-y-3">
           <div className="flex items-center justify-between">
@@ -798,7 +819,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 onClick={() => onNavigateTab('projects')}
                 className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-0.5"
               >
-                Projects <ChevronRight className="w-3.5 h-3.5" />
+                {analytics.totalActiveProjectsCount > 5
+                  ? `All (${analytics.totalActiveProjectsCount})`
+                  : 'Projects'}{' '}
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
@@ -807,13 +831,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {analytics.projectHealth.map((prj) => (
               <div key={prj.id} className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <Building2 className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                    <span className="font-bold text-[var(--lg-foreground)] truncate">
-                      {prj.name}
-                    </span>
-                  </div>
-                  <span className={`font-bold tabular-nums ${ALERT_TEXT_CLASSES[prj.alertLevel]}`}>
+                  <span className="font-bold text-[var(--lg-foreground)] truncate">
+                    {prj.name}
+                  </span>
+                  <span className={`font-bold tabular-nums flex-shrink-0 ${ALERT_TEXT_CLASSES[prj.alertLevel]}`}>
                     {prj.utilizationPct}%
                   </span>
                 </div>
@@ -836,6 +857,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             ))}
           </div>
+
+          {analytics.totalActiveProjectsCount > 5 && onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('projects')}
+              className="text-[11px] font-medium text-[var(--lg-muted)] hover:text-[var(--lg-foreground)] transition-colors"
+            >
+              +{analytics.totalActiveProjectsCount - 5} more{' '}
+              {analytics.totalActiveProjectsCount - 5 === 1 ? 'project' : 'projects'} in Projects
+            </button>
+          )}
         </section>
       )}
 

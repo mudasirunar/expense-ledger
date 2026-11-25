@@ -107,6 +107,7 @@ export interface DashboardAnalytics {
   trendSubtitle: string;
   categoryBreakdown: CategoryBreakdownItem[];
   projectHealth: ProjectHealthItem[];
+  totalActiveProjectsCount: number;
   recentActivity: ActivityFeedItem[];
   totalActivityCount: number;
 }
@@ -378,7 +379,7 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
     spentByProject.set(ob.projectId, (spentByProject.get(ob.projectId) || 0) + (ob.totalAmountMinor || 0));
   }
 
-  const projectHealth: ProjectHealthItem[] = projects
+  const allProjectHealth: ProjectHealthItem[] = projects
     .filter((p) => p.status !== 'archived')
     .filter((p) => scopeFilter === 'all' || scopeFilter === p.id)
     .map((p) => {
@@ -396,7 +397,10 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
         utilizationPct,
         alertLevel: computeBudgetAlert(utilizationPct),
       };
-    });
+    })
+    .sort((a, b) => b.utilizationPct - a.utilizationPct || b.spentMinor - a.spentMinor);
+
+  const projectHealth = allProjectHealth.slice(0, 5);
 
   // 6. Unified Recent Activity Feed (latest 10 items)
   const feed: ActivityFeedItem[] = [];
@@ -499,6 +503,7 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
     trendSubtitle,
     categoryBreakdown,
     projectHealth,
+    totalActiveProjectsCount: allProjectHealth.length,
     recentActivity: feed.slice(0, 5),
     totalActivityCount: feed.length,
   };
