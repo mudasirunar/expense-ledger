@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDownLeft,
@@ -125,6 +125,72 @@ const CashFlowBarChart: React.FC<{
   buckets: TrendBucket[];
   maxMinor: number;
 }> = ({ buckets, maxMinor }) => {
+  const [activeBar, setActiveBar] = useState<{ idx: number; kind: 'in' | 'out' } | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{
+    boxCenterX: number;
+    topY: number;
+    arrowOffsetX: number;
+  } | null>(null);
+
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const barRectRefs = useRef<Map<string, SVGRectElement>>(new Map());
+
+  // Reset active tooltip if buckets change (e.g. horizon switch)
+  const bucketSig = buckets.map((b) => b.key).join('|');
+  useEffect(() => {
+    setActiveBar(null);
+  }, [bucketSig]);
+
+  // Dismiss tooltip when tapping outside or scrolling
+  useEffect(() => {
+    if (!activeBar) return;
+
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (target && chartContainerRef.current?.contains(target)) return;
+      setActiveBar(null);
+    };
+    const handleScroll = () => setActiveBar(null);
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('scroll', handleScroll, { capture: true });
+    };
+  }, [activeBar]);
+
+  // Measure actual rendered SVG bar <rect> pixels so the tooltip & arrow point dead-center
+  useLayoutEffect(() => {
+    if (!activeBar) {
+      setTooltipPos(null);
+      return;
+    }
+
+    const computePos = () => {
+      const container = chartContainerRef.current;
+      const barEl = barRectRefs.current.get(`${activeBar.idx}-${activeBar.kind}`);
+      if (!container || !barEl) return;
+
+      const cRect = container.getBoundingClientRect();
+      const bRect = barEl.getBoundingClientRect();
+      const tipWidth = tooltipRef.current?.offsetWidth || 124;
+      const halfW = tipWidth / 2;
+
+      const anchorX = bRect.left - cRect.left + bRect.width / 2;
+      const topY = bRect.top - cRect.top - 8;
+      const boxCenterX = Math.max(halfW + 4, Math.min(cRect.width - halfW - 4, anchorX));
+      const arrowOffsetX = Math.max(-halfW + 12, Math.min(halfW - 12, anchorX - boxCenterX));
+
+      setTooltipPos({ boxCenterX, topY, arrowOffsetX });
+    };
+
+    computePos();
+    window.addEventListener('resize', computePos);
+    return () => window.removeEventListener('resize', computePos);
+  }, [activeBar, bucketSig]);
+
   const height = 104;
   const topPad = 10;
   const bottomPad = 22;
@@ -134,13 +200,71 @@ const CashFlowBarChart: React.FC<{
   const barWidth = Math.min(11, Math.max(6, Math.floor((slotWidth - 10) / 2)));
   const gap = 3;
 
+  const activeBucket = activeBar ? buckets[activeBar.idx] ?? null : null;
+  const isInTooltip = activeBar?.kind === 'in';
+  const activeAmountMinor = activeBucket
+    ? isInTooltip
+      ? activeBucket.inflowMinor
+      : activeBucket.outflowMinor
+    : 0;
+
+  const toggleBar = (idx: number, kind: 'in' | 'out') => {
+    setActiveBar((prev) => (prev && prev.idx === idx && prev.kind === kind ? null : { idx, kind }));
+  };
+
   return (
-    <div className="w-full">
+    <div
+      ref={chartContainerRef}
+      className="w-full relative pt-2"
+      onPointerLeave={(e) => {
+        if (e.pointerType === 'mouse') setActiveBar(null);
+      }}
+    >
+      {/* Unified Inverted-Theme Tooltip with seamless downward pointer fused to its bottom edge */}
+      {activeBar && activeBucket && (
+        <div
+          ref={tooltipRef}
+          className="pointer-events-none absolute z-30"
+          style={{
+            left: tooltipPos ? `${tooltipPos.boxCenterX}px` : '50%',
+            top: tooltipPos ? `${tooltipPos.topY}px` : '0px',
+            transform: 'translate(-50%, -100%)',
+            visibility: tooltipPos ? 'visible' : 'hidden',
+          }}
+        >
+          <div className="relative px-2.5 py-1.5 rounded-xl bg-[#0B0F19] text-white dark:bg-[#E2DDD5] dark:text-[#0B0F19] shadow-lg text-center whitespace-nowrap">
+            <div className="flex items-center justify-center gap-1 text-[9.5px] font-bold uppercase tracking-wider opacity-75">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isInTooltip ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-rose-400 dark:bg-rose-600'
+                }`}
+              />
+              <span>
+                {activeBucket.label} · {isInTooltip ? 'Inflow' : 'Outflow'}
+              </span>
+            </div>
+            <div className="text-xs font-extrabold tabular-nums leading-tight mt-0.5">
+              {Money.format(activeAmountMinor)}
+            </div>
+
+            {/* Crisp CSS triangle fused directly to the bottom edge of the tooltip box */}
+            <span
+              className="absolute top-full -mt-[0.5px] w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-[#0B0F19] dark:border-t-[#E2DDD5]"
+              style={{
+                left: `calc(50% + ${tooltipPos?.arrowOffsetX ?? 0}px)`,
+                transform: 'translateX(-50%)',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-[112px] overflow-visible"
+        className="w-full h-[112px] overflow-visible select-none"
         role="img"
         aria-label="Inflow versus outflow trend chart"
+        onClick={() => setActiveBar(null)}
       >
         {/* Subtle horizontal reference lines */}
         <line
@@ -181,32 +305,98 @@ const CashFlowBarChart: React.FC<{
               ? Math.max(4, Math.round((bucket.outflowMinor / maxMinor) * chartHeight))
               : 2;
 
+          const isInActive = activeBar?.idx === idx && activeBar.kind === 'in';
+          const isOutActive = activeBar?.idx === idx && activeBar.kind === 'out';
+          const isAnyActive = activeBar !== null;
+          const isBucketActive = activeBar?.idx === idx;
+
+          const inX = cx - barWidth - gap / 2;
+          const outX = cx + gap / 2;
+
           return (
             <g key={bucket.key}>
-              {/* Inflow bar */}
-              <rect
-                x={cx - barWidth - gap / 2}
-                y={topPad + chartHeight - inHeight}
-                width={barWidth}
-                height={inHeight}
-                rx={barWidth / 2}
-                className={bucket.inflowMinor > 0 ? 'fill-emerald-500' : 'fill-emerald-500/20'}
-              />
-              {/* Outflow bar */}
-              <rect
-                x={cx + gap / 2}
-                y={topPad + chartHeight - outHeight}
-                width={barWidth}
-                height={outHeight}
-                rx={barWidth / 2}
-                className={bucket.outflowMinor > 0 ? 'fill-rose-500' : 'fill-rose-500/20'}
-              />
+              {/* Inflow bar (mouse hover on desktop, clean tap toggle on mobile) */}
+              <g
+                className="cursor-pointer transition-opacity duration-150"
+                style={{ opacity: isAnyActive && !isInActive ? 0.35 : 1 }}
+                onPointerEnter={(e) => {
+                  if (e.pointerType === 'mouse') setActiveBar({ idx, kind: 'in' });
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleBar(idx, 'in');
+                }}
+              >
+                <rect
+                  ref={(el) => {
+                    const key = `${idx}-in`;
+                    if (el) barRectRefs.current.set(key, el);
+                    else barRectRefs.current.delete(key);
+                  }}
+                  x={inX}
+                  y={topPad + chartHeight - inHeight}
+                  width={barWidth}
+                  height={inHeight}
+                  rx={barWidth / 2}
+                  className={bucket.inflowMinor > 0 ? 'fill-emerald-500' : 'fill-emerald-500/20'}
+                  style={isInActive ? { filter: 'drop-shadow(0 0 4px rgba(16,185,129,0.65))' } : undefined}
+                />
+                {/* Generous individual hit target for the left (Inflow) half */}
+                <rect
+                  x={idx * slotWidth}
+                  y={0}
+                  width={slotWidth / 2}
+                  height={height}
+                  fill="transparent"
+                />
+              </g>
+
+              {/* Outflow bar (mouse hover on desktop, clean tap toggle on mobile) */}
+              <g
+                className="cursor-pointer transition-opacity duration-150"
+                style={{ opacity: isAnyActive && !isOutActive ? 0.35 : 1 }}
+                onPointerEnter={(e) => {
+                  if (e.pointerType === 'mouse') setActiveBar({ idx, kind: 'out' });
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleBar(idx, 'out');
+                }}
+              >
+                <rect
+                  ref={(el) => {
+                    const key = `${idx}-out`;
+                    if (el) barRectRefs.current.set(key, el);
+                    else barRectRefs.current.delete(key);
+                  }}
+                  x={outX}
+                  y={topPad + chartHeight - outHeight}
+                  width={barWidth}
+                  height={outHeight}
+                  rx={barWidth / 2}
+                  className={bucket.outflowMinor > 0 ? 'fill-rose-500' : 'fill-rose-500/20'}
+                  style={isOutActive ? { filter: 'drop-shadow(0 0 4px rgba(244,63,94,0.65))' } : undefined}
+                />
+                {/* Generous individual hit target for the right (Outflow) half */}
+                <rect
+                  x={cx}
+                  y={0}
+                  width={slotWidth / 2}
+                  height={height}
+                  fill="transparent"
+                />
+              </g>
+
               {/* X-axis label */}
               <text
                 x={cx}
                 y={height - 5}
                 textAnchor="middle"
-                className="fill-[var(--lg-muted)] text-[9.5px] font-semibold"
+                className={
+                  isBucketActive
+                    ? 'fill-[var(--lg-foreground)] text-[9.5px] font-extrabold'
+                    : 'fill-[var(--lg-muted)] text-[9.5px] font-semibold'
+                }
               >
                 {bucket.label}
               </text>
@@ -218,65 +408,190 @@ const CashFlowBarChart: React.FC<{
   );
 };
 
-const CategoryDonutChart: React.FC<{
+const SpendingBreakdownChart: React.FC<{
   items: CategoryBreakdownItem[];
   totalOutflowMinor: number;
 }> = ({ items, totalOutflowMinor }) => {
-  const size = 108;
-  const strokeWidth = 12;
-  const radius = (size - strokeWidth) / 2;
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const itemsSig = items.map((i) => `${i.key}:${i.amountMinor}`).join('|');
+  useEffect(() => {
+    setSelectedKey(null);
+  }, [itemsSig]);
+
+  // Reset selection when tapping anywhere outside this section or when scrolling
+  useEffect(() => {
+    if (!selectedKey) return;
+
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (target && containerRef.current?.contains(target)) return;
+      setSelectedKey(null);
+    };
+
+    const handleScroll = () => {
+      setSelectedKey(null);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('scroll', handleScroll, { capture: true });
+    };
+  }, [selectedKey]);
+
+  const size = 168;
+  const baseStroke = 16;
+  const activeStroke = 20;
+  const radius = (size - activeStroke - 10) / 2;
   const circumference = 2 * Math.PI * radius;
 
+  const selectedItem = selectedKey ? items.find((i) => i.key === selectedKey) ?? null : null;
   let cumulativeFraction = 0;
 
   return (
-    <div className="relative flex-shrink-0 w-[108px] h-[108px] flex items-center justify-center">
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        className="-rotate-90"
-        role="img"
-        aria-label="Spending by category donut chart"
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeOpacity="0.1"
-          strokeWidth={strokeWidth}
-        />
-        {totalOutflowMinor > 0 &&
-          items.map((item) => {
-            const fraction = item.amountMinor / totalOutflowMinor;
-            const dashLength = Math.max(0, fraction * circumference - 2);
-            const dashOffset = -cumulativeFraction * circumference;
-            cumulativeFraction += fraction;
-            return (
-              <circle
-                key={item.key}
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke={item.color}
-                strokeWidth={strokeWidth}
-                strokeLinecap="round"
-                strokeDasharray={`${dashLength} ${circumference}`}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-2">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--lg-muted)]">
-          Spent
-        </span>
-        <span className="text-[11px] font-extrabold text-[var(--lg-foreground)] tabular-nums leading-tight mt-0.5 truncate max-w-[76px]">
-          {Money.format(totalOutflowMinor)}
-        </span>
+    <div ref={containerRef} className="space-y-4">
+      {/* Row 1: Centered, larger interactive donut chart (amount allowed to overlap cleanly without truncation) */}
+      <div className="w-full flex justify-center py-1">
+        <div className="relative w-[168px] h-[168px] flex items-center justify-center overflow-visible">
+          <svg
+            width={size}
+            height={size}
+            viewBox={`0 0 ${size} ${size}`}
+            className="-rotate-90 overflow-visible select-none"
+            role="img"
+            aria-label="Spending by category donut chart"
+          >
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              stroke="currentColor"
+              strokeOpacity="0.1"
+              strokeWidth={baseStroke}
+              className="cursor-pointer"
+              onClick={() => setSelectedKey(null)}
+            />
+            {totalOutflowMinor > 0 &&
+              items.map((item) => {
+                const fraction = item.amountMinor / totalOutflowMinor;
+                const dashLength = Math.max(0, fraction * circumference - 3);
+                const dashOffset = -cumulativeFraction * circumference;
+                cumulativeFraction += fraction;
+                const isSelected = selectedKey === item.key;
+                const isDimmed = selectedKey !== null && !isSelected;
+
+                return (
+                  <circle
+                    key={item.key}
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="none"
+                    stroke={item.color}
+                    strokeWidth={isSelected ? activeStroke : baseStroke}
+                    strokeLinecap="round"
+                    strokeDasharray={`${dashLength} ${circumference}`}
+                    strokeDashoffset={dashOffset}
+                    className="cursor-pointer transition-all duration-200"
+                    style={{
+                      opacity: isDimmed ? 0.25 : 1,
+                      filter: isSelected ? `drop-shadow(0 0 6px ${item.color}99)` : 'none',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedKey((prev) => (prev === item.key ? null : item.key));
+                    }}
+                  />
+                );
+              })}
+          </svg>
+
+          {/* Center label & full untruncated amount (can extend cleanly over the ring if needed) */}
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center overflow-visible">
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-colors duration-200"
+              style={{ color: selectedItem ? selectedItem.color : 'var(--lg-muted)' }}
+            >
+              {selectedItem ? selectedItem.label : 'Spent'}
+            </span>
+            <span className="text-base font-black text-[var(--lg-foreground)] tabular-nums leading-tight whitespace-nowrap mt-0.5">
+              {Money.format(selectedItem ? selectedItem.amountMinor : totalOutflowMinor)}
+            </span>
+            {selectedItem && (
+              <span className="text-[10px] font-bold text-[var(--lg-muted)] tabular-nums mt-0.5">
+                {selectedItem.sharePct}% of spend
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: Legends below, 1 per row with tight spacing & active highlight glow */}
+      <div className="space-y-1">
+        {items.map((cat) => {
+          const isSelected = selectedKey === cat.key;
+          const isDimmed = selectedKey !== null && !isSelected;
+
+          return (
+            <button
+              key={cat.key}
+              type="button"
+              onClick={() => setSelectedKey((prev) => (prev === cat.key ? null : cat.key))}
+              className={`w-full text-left py-1.5 px-2 -mx-2 rounded-xl flex items-center justify-between gap-2 transition-all duration-200 ${
+                isSelected
+                  ? 'scale-[1.02] bg-[var(--lg-glass)] shadow-sm'
+                  : isDimmed
+                    ? 'opacity-35'
+                    : 'hover:bg-[var(--lg-glass)]/50'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={`rounded-full flex-shrink-0 transition-all duration-200 ${
+                    isSelected ? 'w-3 h-3' : 'w-2.5 h-2.5'
+                  }`}
+                  style={{
+                    backgroundColor: cat.color,
+                    boxShadow: isSelected ? `0 0 10px ${cat.color}` : 'none',
+                  }}
+                />
+                <span
+                  className={`truncate transition-all duration-200 ${
+                    isSelected
+                      ? 'text-[13px] font-extrabold text-[var(--lg-foreground)]'
+                      : 'text-xs font-semibold text-[var(--lg-foreground)]'
+                  }`}
+                >
+                  {cat.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 tabular-nums">
+                <span
+                  className={`transition-all duration-200 ${
+                    isSelected
+                      ? 'text-xs font-bold text-[var(--lg-foreground)]'
+                      : 'text-[11px] text-[var(--lg-muted)]'
+                  }`}
+                >
+                  {cat.sharePct}%
+                </span>
+                <span
+                  className={`transition-all duration-200 ${
+                    isSelected
+                      ? 'text-[13px] font-black text-[var(--lg-foreground)]'
+                      : 'text-xs font-bold text-[var(--lg-foreground)]'
+                  }`}
+                >
+                  {Money.format(cat.amountMinor)}
+                </span>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -884,34 +1199,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             No expenses or obligations recorded in this period.
           </p>
         ) : (
-          <div className="flex items-center gap-4">
-            <CategoryDonutChart
-              items={analytics.categoryBreakdown}
-              totalOutflowMinor={analytics.totalOutflowMinor}
-            />
-
-            <div className="flex-1 min-w-0 space-y-1">
-              {analytics.categoryBreakdown.map((cat) => (
-                <div key={cat.key} className="py-1.5 flex items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                    <span className="font-semibold text-[var(--lg-foreground)] truncate">
-                      {cat.label}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 tabular-nums">
-                    <span className="text-[11px] text-[var(--lg-muted)]">{cat.sharePct}%</span>
-                    <span className="font-bold text-[var(--lg-foreground)]">
-                      {Money.format(cat.amountMinor)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <SpendingBreakdownChart
+            items={analytics.categoryBreakdown}
+            totalOutflowMinor={analytics.totalOutflowMinor}
+          />
         )}
       </section>
 
@@ -1235,6 +1526,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         }}
         existingBudgets={rawBudgets}
         editingBudget={editingBudget}
+        onDeleted={(deletedId) => {
+          setRawBudgets((prev) => prev.filter((b) => b.id !== deletedId));
+          if (cachedDashboard && cachedDashboard.userId === userId) {
+            cachedDashboard.budgets = cachedDashboard.budgets.filter((b) => b.id !== deletedId);
+          }
+        }}
       />
     </div>
   );

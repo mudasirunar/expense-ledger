@@ -74,17 +74,9 @@ export class FirestoreBudgetRepository implements IBudgetRepository {
     });
   }
 
-  async delete(userId: string, id: string): Promise<void> {
-    let name = 'Budget';
-    try {
-      const snap = await getDoc(doc(db, 'users', userId, 'budgets', id));
-      if (snap.exists()) {
-        const data = snap.data() as Partial<CategoryBudget>;
-        if (data.categoryLabel) name = data.categoryLabel;
-      }
-    } catch {
-      // Fallback to default label if offline & uncached
-    }
+  async delete(userId: string, id: string, label?: string): Promise<void> {
+    // Avoid blocking getDoc() before local batch commit so offline/slow networks delete instantly
+    const name = label?.trim() || 'Budget';
     await hardDeleteWithRegistry(userId, 'budgets', id, name);
   }
 }

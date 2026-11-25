@@ -95,6 +95,6 @@ export interface IBudgetRepository {
   ): () => void;
   create(userId: string, budget: CategoryBudget): Promise<void>;
   update(userId: string, id: string, partial: Partial<CategoryBudget>): Promise<void>;
-  delete(userId: string, id: string): Promise<void>;
+  delete(userId: string, id: string, label?: string): Promise<void>;
 }
 

@@ -21,6 +21,7 @@ interface CategoryBudgetModalProps {
   onClose: () => void;
   existingBudgets: readonly CategoryBudget[];
   editingBudget?: CategoryBudget | null;
+  onDeleted?: (budgetId: string) => void;
 }
 
 export const CategoryBudgetModal: React.FC<CategoryBudgetModalProps> = ({
@@ -28,6 +29,7 @@ export const CategoryBudgetModal: React.FC<CategoryBudgetModalProps> = ({
   onClose,
   existingBudgets,
   editingBudget = null,
+  onDeleted,
 }) => {
   const { user } = useAuth();
   const { showSnackbar } = useSnackbar();
@@ -126,9 +128,13 @@ export const CategoryBudgetModal: React.FC<CategoryBudgetModalProps> = ({
     if (!editingBudget || submitting || deleting) return;
     setDeleting(true);
     setError(null);
+    const targetId = editingBudget.id;
+    const targetLabel = editingBudget.categoryLabel;
     try {
-      await awaitLocalCommit(budgetRepo.delete(userId, editingBudget.id));
-      showSnackbar({ message: `${editingBudget.categoryLabel} budget removed.`, tone: 'default' });
+      // Immediately hard-delete locally + write delete-wins tombstone in deleted_records (syncs in background)
+      await awaitLocalCommit(budgetRepo.delete(userId, targetId, targetLabel));
+      onDeleted?.(targetId);
+      showSnackbar({ message: `${targetLabel} budget removed.`, tone: 'default' });
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to remove budget.');

@@ -182,8 +182,8 @@ describe('computeDashboardAnalytics', () => {
     expect(res.projectHealth[0].utilizationPct).toBe(90);
     expect(res.projectHealth[0].alertLevel).toBe('critical');
 
-    // Category breakdown sorted descending (Materials 80k first)
-    expect(res.categoryBreakdown[0].label).toBe('Materials');
+    // Category breakdown sorted descending (Bills 80k first)
+    expect(res.categoryBreakdown[0].label).toBe('Bills');
     expect(res.categoryBreakdown[0].amountMinor).toBe(8000000);
 
     // Top accounts sorted by balance descending (Meezan Bank 150k first) & capped at 5

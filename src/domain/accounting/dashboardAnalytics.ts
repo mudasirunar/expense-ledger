@@ -123,7 +123,7 @@ const CATEGORY_COLORS = [
 ];
 
 const OBLIGATION_TYPE_LABELS: Record<ObligationType, string> = {
-  purchase: 'Materials',
+  purchase: 'Bills',
   contract_bill: 'Contractor Bills',
   labour_wage: 'Labour Wages',
   customer_invoice: 'Client Invoices',
@@ -145,7 +145,7 @@ function normalizeDateKey(raw: string | undefined): string {
 }
 
 function formatCategoryLabel(raw: string | undefined): string {
-  if (!raw || !raw.trim()) return 'General';
+  if (!raw || !raw.trim()) return 'General Expenses';
   return raw
     .trim()
     .replace(/[_-]+/g, ' ')
