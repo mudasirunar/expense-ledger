@@ -15,12 +15,13 @@ import { Glass, SegmentedControl } from 'glisse';
 import { useAuth } from '@/app/providers/AuthProvider';
 import {
   FirestoreAccountRepository,
+  FirestoreContactRepository,
   FirestoreObligationRepository,
   FirestorePaymentRepository,
   FirestoreProjectRepository,
   FirestoreTransactionRepository,
 } from '@/data/repositories/firestore';
-import { Account, Obligation, Payment, Project, Transaction } from '@/domain/entities';
+import { Account, Contact, Obligation, Payment, Project, Transaction } from '@/domain/entities';
 import { Money } from '@/domain/accounting/money';
 import {
   ActivityFeedItem,
@@ -33,8 +34,10 @@ import {
 } from '@/domain/accounting/dashboardAnalytics';
 import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
 import { ContactsView } from '@/components/contacts/ContactsView';
+import { ActivityDetailSheet } from '@/components/history/ActivityDetailSheet';
 
 const accountRepo = new FirestoreAccountRepository();
+const contactRepo = new FirestoreContactRepository();
 const transactionRepo = new FirestoreTransactionRepository();
 const projectRepo = new FirestoreProjectRepository();
 const obligationRepo = new FirestoreObligationRepository();
@@ -43,6 +46,7 @@ const paymentRepo = new FirestorePaymentRepository();
 interface CachedDashboardState {
   userId: string;
   accounts: Account[];
+  contacts: Contact[];
   transactions: Transaction[];
   projects: Project[];
   obligations: Obligation[];
@@ -288,6 +292,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [rawAccounts, setRawAccounts] = useState<Account[]>(() =>
     hasWarmCache ? cachedDashboard!.accounts : []
   );
+  const [rawContacts, setRawContacts] = useState<Contact[]>(() =>
+    hasWarmCache ? cachedDashboard!.contacts : []
+  );
   const [rawTransactions, setRawTransactions] = useState<Transaction[]>(() =>
     hasWarmCache ? cachedDashboard!.transactions : []
   );
@@ -301,6 +308,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     hasWarmCache ? cachedDashboard!.payments : []
   );
   const [loading, setLoading] = useState<boolean>(() => !hasWarmCache);
+  const [selectedActivity, setSelectedActivity] = useState<ActivityFeedItem | null>(null);
 
   useEffect(() => {
     let accLoaded = false;
@@ -311,6 +319,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         cachedDashboard = {
           userId,
           accounts: [],
+          contacts: [],
           transactions: [],
           projects: [],
           obligations: [],
@@ -412,6 +421,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         (err) => console.warn('[Dashboard] Payment subscribe fallback:', err)
       )
     );
+
+    if (contactRepo.subscribe) {
+      unsubs.push(
+        contactRepo.subscribe(
+          userId,
+          (cnts) => {
+            setRawContacts(cnts);
+            ensureCache().contacts = cnts;
+          },
+          (err) => console.warn('[Dashboard] Contact subscribe fallback:', err)
+        )
+      );
+    }
 
     return () => {
       for (const unsub of unsubs) {
@@ -972,9 +994,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </p>
                 <div className="space-y-1">
                   {group.items.map((item) => (
-                    <div
+                    <button
                       key={item.id}
-                      className="py-2.5 flex items-center justify-between gap-3"
+                      type="button"
+                      onClick={() => setSelectedActivity(item)}
+                      className="w-full text-left py-2.5 px-1 -mx-1 rounded-2xl flex items-center justify-between gap-3 active:bg-[var(--lg-glass)] transition-colors"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div
@@ -1024,7 +1048,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {item.badge}
                         </p>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -1037,6 +1061,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <section className="pt-2">
         <ContactsView />
       </section>
+
+      {/* Reusable Transaction Detail & Share Bottom Sheet */}
+      <ActivityDetailSheet
+        selectedItem={selectedActivity}
+        onClose={() => setSelectedActivity(null)}
+        accounts={rawAccounts}
+        projects={rawProjects}
+        contacts={rawContacts}
+        transactions={rawTransactions}
+        obligations={rawObligations}
+        payments={rawPayments}
+      />
     </div>
   );
 };
