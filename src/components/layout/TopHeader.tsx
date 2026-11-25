@@ -25,8 +25,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ title, subtitle, onOpenSea
           variant="glass"
           aria-label="Search ledger"
           onClick={onOpenSearch}
-          icon={<Search className="w-4 h-4" />}
-          className="!p-2 !rounded-full !w-9 !h-9 flex-shrink-0"
+          icon={<Search className="w-5 h-5" />}
+          className="!p-0 !rounded-full !w-[44px] !h-[44px] flex-shrink-0"
         />
       )}
     </header>

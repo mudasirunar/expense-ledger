@@ -348,12 +348,12 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
               disabled={isSharingReceipt}
               icon={
                 isSharingReceipt ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  <Share className="w-4 h-4" />
+                  <Share className="w-5 h-5" />
                 )
               }
-              className="!p-2 !rounded-full !w-9 !h-9 flex-shrink-0"
+              className="!p-0 !rounded-full !w-[44px] !h-[44px] flex-shrink-0"
             />
           </div>
 

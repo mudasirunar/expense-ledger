@@ -251,8 +251,8 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ onBa
               variant="glass"
               aria-label="Go back"
               onClick={onBack}
-              icon={<ChevronLeft className="w-4 h-4" />}
-              className="!p-2 !rounded-full !w-9 !h-9 flex-shrink-0"
+              icon={<ChevronLeft className="!w-6 !h-6" />}
+              className="!p-0 !rounded-full !w-[44px] !h-[44px] flex-shrink-0"
             />
             <div className="min-w-0">
               <h1 className="text-xl font-extrabold text-[var(--lg-foreground)] tracking-tight truncate">
@@ -271,12 +271,12 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ onBa
             disabled={isExporting}
             icon={
               isExporting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <Download className="w-4 h-4" />
+                <Download className="w-5 h-5" />
               )
             }
-            className="!p-2 !rounded-full !w-9 !h-9 flex-shrink-0"
+            className="!p-0 !rounded-full !w-[44px] !h-[44px] flex-shrink-0"
           />
         </header>
 

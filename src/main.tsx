@@ -83,7 +83,7 @@ if (typeof window !== 'undefined') {
       (e) => {
         const target = e.target as HTMLElement | null;
         if (!target || target.tagName !== 'INPUT') return;
-        if (!target.closest('.fixed.z-50')) return;
+        if (!target.closest('.fixed.z-50, [data-prevent-ios-pan="true"]')) return;
         const input = target as HTMLInputElement;
         if (!TEXT_TYPES.includes(input.type) || input.disabled || input.readOnly) return;
         if (document.activeElement === input) return;

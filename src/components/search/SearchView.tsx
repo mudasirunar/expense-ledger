@@ -7,6 +7,7 @@ import {
   FileText,
   Landmark,
   Search,
+  SearchX,
   Smartphone,
   User,
   Wallet,
@@ -119,12 +120,55 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
     hasWarmCache ? cachedSearchData!.payments : []
   );
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const scrollBodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Sync recent searches when user changes
   useEffect(() => {
     setRecentSearches(loadRecentSearches(userId));
   }, [userId]);
+
+  // Prevent iOS Safari / Standalone PWA from panning the visual viewport off-screen
+  // when swiping on the header, empty state, or short result lists while the keyboard is open.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const onTouchMove = (e: TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      // Always allow horizontal swiping on the filter chips row
+      if (target.closest('[data-search-chips="true"]')) return;
+
+      // Allow scrolling inside any open detail modal/sheet above Search
+      if (target.closest('.fixed.z-50')) return;
+
+      const body = scrollBodyRef.current;
+      if (body && body.contains(target) && body.scrollHeight > body.clientHeight + 1) {
+        return;
+      }
+
+      // Lock viewport when empty or when content already fits on screen
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+
+    const keepViewportPinned = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
+    root.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.visualViewport?.addEventListener('scroll', keepViewportPinned);
+    return () => {
+      root.removeEventListener('touchmove', onTouchMove);
+      window.visualViewport?.removeEventListener('scroll', keepViewportPinned);
+    };
+  }, []);
 
   // Auto-focus search bar on mount without causing iOS PWA viewport scroll/bottom gap
   useEffect(() => {
@@ -316,6 +360,8 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
     (showAccounts ? results.accounts.length : 0) +
     (showContacts ? results.contacts.length : 0);
 
+  const isEmptyState = (!hasQuery && recentSearches.length === 0) || (hasQuery && visibleCount === 0);
+
   const accountIcon = (type: Account['type']) => {
     switch (type) {
       case 'cash':
@@ -330,16 +376,26 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="flex flex-col app-screen w-full bg-[#E2DDD5] dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
-      {/* Standalone Search Screen — NO pull-to-refresh, static 100lvh on iOS PWA to prevent bottom keyboard gap */}
-      <div className="flex-1 overflow-y-auto scroll-container overscroll-y-contain">
+    <div
+      ref={rootRef}
+      data-prevent-ios-pan="true"
+      className="fixed inset-0 z-40 flex flex-col app-screen w-full bg-[#E2DDD5] dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200"
+    >
+      {/* Scrollable container: top spacer + Search header scroll up with results, locked when empty */}
+      <div
+        ref={scrollBodyRef}
+        className={`flex-1 min-h-0 flex flex-col ${
+          isEmptyState
+            ? 'overflow-hidden overscroll-none'
+            : 'overflow-y-auto scroll-container overscroll-y-contain'
+        }`}
+      >
         <div
-          className="w-full select-none pointer-events-none"
+          className="w-full select-none pointer-events-none flex-shrink-0"
           style={{ height: 'var(--top-spacer, env(safe-area-inset-top, 0px))' }}
         />
 
-        {/* Expanding Search Header: Long Glisse pill search bar + separate circular Glisse X button outside */}
-        <header className="max-w-md mx-auto w-full px-4 py-2.5 flex items-center gap-2.5 select-none">
+        <header className="max-w-md mx-auto w-full px-4 py-2.5 flex items-center gap-2.5 select-none flex-shrink-0">
           <form
             action=""
             onSubmit={handleSubmit}
@@ -380,20 +436,45 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
             type="button"
             aria-label="Close search"
             onClick={handleCloseClick}
-            icon={<X className="w-4 h-4" />}
+            icon={<X className="!w-6 !h-6" />}
             className="!p-0 !rounded-full !w-[44px] !h-[44px] flex-shrink-0"
           />
         </header>
 
-        <main className="max-w-md mx-auto w-full px-4 pt-2 pb-12 space-y-5">
+        <main
+          className={`max-w-md mx-auto w-full px-4 pt-2 flex-1 flex flex-col space-y-5 ${
+            isEmptyState ? 'pb-0' : ''
+          }`}
+          style={
+            !isEmptyState
+              ? { paddingBottom: 'calc(3rem + var(--kb, 0px))' }
+              : undefined
+          }
+        >
           {!hasQuery ? (
-            /* ================= RECENT SEARCHES ================= */
-            <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-bold tracking-wider text-[var(--lg-muted)] uppercase">
-                  Recent Searches
-                </h2>
-                {recentSearches.length > 0 && (
+            recentSearches.length === 0 ? (
+              <div
+                className="flex-1 flex flex-col items-center justify-center text-center px-6 space-y-2"
+                style={{
+                  paddingBottom: 'var(--kb, 0px)',
+                  transition: 'padding-bottom 180ms ease-out',
+                }}
+              >
+                <Search className="w-8 h-8 text-[var(--lg-muted)] opacity-50" />
+                <p className="text-sm font-bold text-[var(--lg-foreground)]">
+                  Search your ledger
+                </p>
+                <p className="text-xs font-medium text-[var(--lg-muted)] max-w-[260px]">
+                  Find transactions, bills, payments, projects, accounts, and contacts instantly.
+                </p>
+              </div>
+            ) : (
+              /* ================= RECENT SEARCHES ================= */
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-bold tracking-wider text-[var(--lg-muted)] uppercase">
+                    Recent Searches
+                  </h2>
                   <button
                     type="button"
                     onClick={handleClearAllRecent}
@@ -401,17 +482,8 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
                   >
                     Clear All
                   </button>
-                )}
-              </div>
-
-              {recentSearches.length === 0 ? (
-                <div className="py-12 text-center space-y-1.5">
-                  <Search className="w-7 h-7 mx-auto text-[var(--lg-muted)] opacity-50" />
-                  <p className="text-xs font-medium text-[var(--lg-muted)]">
-                    Search across transactions, bills, payments, projects, accounts, and contacts.
-                  </p>
                 </div>
-              ) : (
+
                 <div className="space-y-0.5">
                   {(showAllRecent
                     ? recentSearches
@@ -445,13 +517,16 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
                     </div>
                   )}
                 </div>
-              )}
-            </section>
+              </section>
+            )
           ) : (
             /* ================= LIVE SEARCH RESULTS ================= */
             <>
               {/* Filter Chips */}
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+              <div
+                data-search-chips="true"
+                className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 flex-shrink-0"
+              >
                 {(
                   [
                     { id: 'all', label: `All (${results.totalCount})` },
@@ -480,10 +555,16 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
               </div>
 
               {visibleCount === 0 ? (
-                <div className="py-12 text-center space-y-1.5">
-                  <Search className="w-7 h-7 mx-auto text-[var(--lg-muted)] opacity-50" />
+                <div
+                  className="flex-1 flex flex-col items-center justify-center text-center px-6 space-y-2"
+                  style={{
+                    paddingBottom: 'var(--kb, 0px)',
+                    transition: 'padding-bottom 180ms ease-out',
+                  }}
+                >
+                  <SearchX className="w-9 h-9 text-[var(--lg-muted)] opacity-55" />
                   <p className="text-sm font-bold text-[var(--lg-foreground)]">No matches found</p>
-                  <p className="text-xs text-[var(--lg-muted)]">
+                  <p className="text-xs text-[var(--lg-muted)] max-w-[260px]">
                     Try another keyword, project name, contact, or amount.
                   </p>
                 </div>
