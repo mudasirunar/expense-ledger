@@ -102,7 +102,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     setIsExportingCsv(true);
     try {
       const { rowCount, outcome } = await exportLedgerExcel(user.uid);
-      if (outcome === 'downloaded') {
+      if (outcome === 'shared' || outcome === 'downloaded') {
         showSnackbar({
           message:
             rowCount > 0

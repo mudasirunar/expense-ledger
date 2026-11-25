@@ -109,10 +109,13 @@ export const ProfileView: React.FC = () => {
     setIsExportingJson(true);
     try {
       const { totalRecords, outcome } = await exportFullBackupJson(user.uid);
-      // Only show download snackbar on actual direct download (never fake success when OS Share Sheet is used/cancelled)
-      if (outcome === 'downloaded') {
+      if (outcome === 'shared' || outcome === 'downloaded') {
+        const verb = outcome === 'shared' ? 'shared' : 'downloaded';
         showSnackbar({
-          message: totalRecords > 0 ? `Backup downloaded (${totalRecords} records).` : 'Empty backup downloaded.',
+          message:
+            totalRecords > 0
+              ? `Backup ${verb} (${totalRecords} records).`
+              : `Empty backup ${verb}.`,
           tone: 'success',
         });
       }
@@ -132,7 +135,7 @@ export const ProfileView: React.FC = () => {
     setIsExportingCsv(true);
     try {
       const { rowCount, outcome } = await exportLedgerExcel(user.uid);
-      if (outcome === 'downloaded') {
+      if (outcome === 'shared' || outcome === 'downloaded') {
         showSnackbar({
           message:
             rowCount > 0

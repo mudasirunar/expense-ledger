@@ -270,7 +270,9 @@ export const ActivityDetailSheet: React.FC<ActivityDetailSheetProps> = ({
         },
       });
 
-      if (outcome === 'downloaded') {
+      if (outcome === 'shared') {
+        showSnackbar({ message: 'Receipt shared.', tone: 'success' });
+      } else if (outcome === 'downloaded') {
         showSnackbar({ message: 'Receipt image saved.', tone: 'success' });
       }
     } catch (error) {
