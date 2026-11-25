@@ -9,7 +9,7 @@
 | **Phase 2** | Domain Foundation & Accounting Engine | **Completed** | 100% pass on accounting invariant unit tests (20/20) |
 | **Phase 3** | Firestore Repositories & Security Rules | **Completed** | Clean user-scoped rules published & repositories implemented |
 | **Phase 4** | Core Features (Projects, Contacts, Accounts, Ledger) | **Completed** | Multi-project isolation, latest payment, transfer & Quick Add verified |
-| **Phase 5** | Dashboard, Search, Budgets, Reports & CSV Export | **In Progress** | Reconciled charts, normalized search, CSV download |
+| **Phase 5** | Dashboard, Search, Budgets, Reports & CSV Export | **Completed** | Reconciled charts, normalized search, bills, PDF receipts & Excel/CSV export |
 | **Phase 6** | Offline Hardening, iOS PWA & Vercel Release | Pending | iPhone Safari & installed PWA verification |
 | **Phase 7** | A11y, Performance Audit, Security & Final Handoff | Pending | WCAG AA compliance, Lighthouse score > 90 |
 
@@ -71,7 +71,7 @@
 - [x] Build Obligation & Payment Entry modal (purchases, staged payments, advances) with Glisse inputs & buttons (`QuickAddModal.tsx`).
 - [x] Build Instant Latest Payment lookup widget.
 
-### Phase 5: Dashboard, Search, Budgets & Reports (`v0.3.0` In Progress)
+### Phase 5: Dashboard, Search, Budgets & Reports (`v0.4.0` Completed)
 - [x] Build Executive Dashboard with dynamic time horizons (`All Time`, `This Month`, `Today`), scope filters (`All`, `Personal`, Projects), Cash Flow Trend chart, Spending Donut, Liquidity Mix (top 5), Project Budget Health (top 5 with 80%/90%/100% thresholds), Payables/Receivables, and Recent Activity (last 5).
 - [x] Build standalone History screen (`#/history`) with Transaction Detail Bottom Sheet & 9:16 Bank Slip PNG receipt sharing (`receiptShareService.ts`).
 - [x] Build normalized in-memory search across all financial entities (`#/search` standalone screen with expanding search bar, external Glisse X button, recent searches + Clear All, live results, and top-bar trigger on Overview/Projects/Accounts).
