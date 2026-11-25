@@ -6,6 +6,7 @@ import {
   Obligation, 
   Payment, 
   Allocation,
+  CategoryBudget,
   TransactionScope,
   ObligationStatus
 } from '@/domain/entities';
@@ -82,5 +83,18 @@ export interface IPaymentRepository {
   void(userId: string, id: string): Promise<void>;
   listAllocationsForPayment(userId: string, paymentId: string): Promise<Allocation[]>;
   listAllocationsForObligation(userId: string, obligationId: string): Promise<Allocation[]>;
+}
+
+export interface IBudgetRepository {
+  getById(userId: string, id: string): Promise<CategoryBudget | null>;
+  list(userId: string): Promise<CategoryBudget[]>;
+  subscribe?(
+    userId: string,
+    onUpdate: (budgets: CategoryBudget[]) => void,
+    onError?: (error: Error) => void
+  ): () => void;
+  create(userId: string, budget: CategoryBudget): Promise<void>;
+  update(userId: string, id: string, partial: Partial<CategoryBudget>): Promise<void>;
+  delete(userId: string, id: string): Promise<void>;
 }
 

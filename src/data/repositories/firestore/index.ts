@@ -4,4 +4,5 @@ export * from './FirestoreAccountRepository';
 export * from './FirestoreTransactionRepository';
 export * from './FirestoreObligationRepository';
 export * from './FirestorePaymentRepository';
+export * from './FirestoreBudgetRepository';
 

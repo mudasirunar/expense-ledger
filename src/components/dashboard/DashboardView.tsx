@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
   ChevronRight,
   FileText,
   Landmark,
+  Plus,
   Smartphone,
   TrendingDown,
   TrendingUp,
@@ -15,13 +17,22 @@ import { Glass, SegmentedControl } from 'glisse';
 import { useAuth } from '@/app/providers/AuthProvider';
 import {
   FirestoreAccountRepository,
+  FirestoreBudgetRepository,
   FirestoreContactRepository,
   FirestoreObligationRepository,
   FirestorePaymentRepository,
   FirestoreProjectRepository,
   FirestoreTransactionRepository,
 } from '@/data/repositories/firestore';
-import { Account, Contact, Obligation, Payment, Project, Transaction } from '@/domain/entities';
+import {
+  Account,
+  CategoryBudget,
+  Contact,
+  Obligation,
+  Payment,
+  Project,
+  Transaction,
+} from '@/domain/entities';
 import { Money } from '@/domain/accounting/money';
 import {
   ActivityFeedItem,
@@ -32,9 +43,11 @@ import {
   TrendBucket,
   computeDashboardAnalytics,
 } from '@/domain/accounting/dashboardAnalytics';
+import { computeCategoryBudgets } from '@/domain/accounting/budgetEngine';
 import { registerMemoryCacheClearer } from '@/data/sync/dataWipeService';
 import { ContactsView } from '@/components/contacts/ContactsView';
 import { ActivityDetailSheet } from '@/components/history/ActivityDetailSheet';
+import { CategoryBudgetModal } from './CategoryBudgetModal';
 
 const accountRepo = new FirestoreAccountRepository();
 const contactRepo = new FirestoreContactRepository();
@@ -42,6 +55,7 @@ const transactionRepo = new FirestoreTransactionRepository();
 const projectRepo = new FirestoreProjectRepository();
 const obligationRepo = new FirestoreObligationRepository();
 const paymentRepo = new FirestorePaymentRepository();
+const budgetRepo = new FirestoreBudgetRepository();
 
 interface CachedDashboardState {
   userId: string;
@@ -51,6 +65,7 @@ interface CachedDashboardState {
   projects: Project[];
   obligations: Obligation[];
   payments: Payment[];
+  budgets: CategoryBudget[];
 }
 
 let cachedDashboard: CachedDashboardState | null = null;
@@ -307,8 +322,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [rawPayments, setRawPayments] = useState<Payment[]>(() =>
     hasWarmCache ? cachedDashboard!.payments : []
   );
+  const [rawBudgets, setRawBudgets] = useState<CategoryBudget[]>(() =>
+    hasWarmCache ? cachedDashboard!.budgets : []
+  );
   const [loading, setLoading] = useState<boolean>(() => !hasWarmCache);
   const [selectedActivity, setSelectedActivity] = useState<ActivityFeedItem | null>(null);
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState<boolean>(false);
+  const [editingBudget, setEditingBudget] = useState<CategoryBudget | null>(null);
 
   useEffect(() => {
     let accLoaded = false;
@@ -324,6 +344,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           projects: [],
           obligations: [],
           payments: [],
+          budgets: [],
         };
       }
       return cachedDashboard;
@@ -422,6 +443,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )
     );
 
+    unsubs.push(
+      budgetRepo.subscribe(
+        userId,
+        (bdgs) => {
+          setRawBudgets(bdgs);
+          ensureCache().budgets = bdgs;
+        },
+        (err) => console.warn('[Dashboard] Budget subscribe fallback:', err)
+      )
+    );
+
     if (contactRepo.subscribe) {
       unsubs.push(
         contactRepo.subscribe(
@@ -481,6 +513,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         pinSelectedProject,
       }),
     [rawAccounts, rawProjects, rawTransactions, rawObligations, rawPayments, timeFilter, scopeFilter, pinSelectedProject]
+  );
+
+  const budgetSummary = useMemo(
+    () => computeCategoryBudgets(rawBudgets, rawTransactions),
+    [rawBudgets, rawTransactions]
   );
 
   // Group recent activity by date label
@@ -878,6 +915,121 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         )}
       </section>
 
+      {/* Personal Category Budgets (Monthly / Weekly with 80% / 90% / 100% Alerts) */}
+      {(scopeFilter === 'all' || scopeFilter === 'personal') && (
+        <section className="pb-5 border-b border-[var(--lg-separator)] space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="text-xs font-bold tracking-wider text-[var(--lg-muted)] uppercase">
+                Personal Budgets
+              </h2>
+              {budgetSummary.alertCount > 0 && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    budgetSummary.overCount > 0
+                      ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                      : budgetSummary.criticalCount > 0
+                        ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400'
+                        : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                  }`}
+                >
+                  <AlertTriangle className="w-2.5 h-2.5" />
+                  {budgetSummary.overCount > 0
+                    ? `${budgetSummary.overCount} Over`
+                    : `${budgetSummary.alertCount} Near Limit`}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingBudget(null);
+                setIsBudgetModalOpen(true);
+              }}
+              className="text-xs font-semibold text-blue-600 dark:text-blue-400 inline-flex items-center gap-0.5 flex-shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Set Budget
+            </button>
+          </div>
+
+          {budgetSummary.items.length === 0 ? (
+            <p className="text-xs text-[var(--lg-muted)] py-1">
+              No personal category limits yet. Set monthly or weekly budgets to get 80%, 90%, and 100% spending alerts.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {budgetSummary.items.map((item) => {
+                const rawBudget = rawBudgets.find((b) => b.id === item.id) || null;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      if (!rawBudget) return;
+                      setEditingBudget(rawBudget);
+                      setIsBudgetModalOpen(true);
+                    }}
+                    className="w-full text-left space-y-1.5 rounded-2xl py-1 px-1 -mx-1 active:bg-[var(--lg-glass)] transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-bold text-[var(--lg-foreground)] truncate">
+                          {item.categoryLabel}
+                        </span>
+                        <span className="text-[10px] font-semibold text-[var(--lg-muted)] flex-shrink-0">
+                          {item.periodLabel}
+                        </span>
+                        {item.alertLevel !== 'healthy' && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide flex-shrink-0 ${
+                              item.alertLevel === 'over'
+                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                                : item.alertLevel === 'critical'
+                                  ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400'
+                                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                            }`}
+                          >
+                            {item.alertLevel === 'over'
+                              ? 'Over'
+                              : item.alertLevel === 'critical'
+                                ? '90%+'
+                                : '80%+'}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`font-bold tabular-nums flex-shrink-0 ${ALERT_TEXT_CLASSES[item.alertLevel]}`}
+                      >
+                        {item.utilizationPct}%
+                      </span>
+                    </div>
+
+                    <div className="w-full h-1.5 rounded-full bg-[var(--lg-separator)] overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${ALERT_BAR_CLASSES[item.alertLevel]}`}
+                        style={{ width: `${Math.min(100, item.utilizationPct)}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-[var(--lg-muted)] tabular-nums">
+                      <span>
+                        Spent {Money.format(item.spentMinor)} of {Money.format(item.limitMinor)}
+                      </span>
+                      <span className={item.remainingMinor < 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : ''}>
+                        {item.remainingMinor >= 0
+                          ? `${Money.format(item.remainingMinor)} left`
+                          : `${Money.format(Math.abs(item.remainingMinor))} over`}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Active Projects Budget Health: Top 5 Projects (Flat-on-Screen) */}
       {analytics.projectHealth.length > 0 && (
         <section className="pt-2 space-y-3">
@@ -1072,6 +1224,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         transactions={rawTransactions}
         obligations={rawObligations}
         payments={rawPayments}
+      />
+
+      {/* Personal Category Budget Create / Edit Modal */}
+      <CategoryBudgetModal
+        isOpen={isBudgetModalOpen}
+        onClose={() => {
+          setIsBudgetModalOpen(false);
+          setEditingBudget(null);
+        }}
+        existingBudgets={rawBudgets}
+        editingBudget={editingBudget}
       />
     </div>
   );

@@ -10,6 +10,7 @@ import {
 } from '@/data/repositories/firestore';
 import { DomainUseCases } from '@/domain/usecases';
 import { Money } from '@/domain/accounting/money';
+import { PERSONAL_EXPENSE_CATEGORIES } from '@/domain/accounting/budgetEngine';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useSnackbar } from '@/app/providers/SnackbarProvider';
 import { Button, Input, SegmentedControl } from 'glisse';
@@ -67,6 +68,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
 
   // Project & contact relation
   const [projectId, setProjectId] = useState<string>('');
+  const [categoryId, setCategoryId] = useState<string>('');
   const [contactId, setContactId] = useState<string>('');
   const [accountId, setAccountId] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
@@ -139,6 +141,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
           scope: projectId ? 'project' : 'personal',
           projectId: projectId || undefined,
           accountId,
+          categoryId: !projectId && categoryId ? categoryId : undefined,
           amountMinor,
           date,
           notes: combinedNotes,
@@ -218,6 +221,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
       setTitle('');
       setAmountStr('');
       setNotes('');
+      setCategoryId('');
       setItemName('');
       setUnitPriceStr('');
       showSnackbar({
@@ -437,6 +441,25 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Personal Expense Category (for Personal Category Budgets & Analytics) */}
+          <div className={entryType === 'expense' && !projectId ? 'block' : 'hidden'}>
+            <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
+              Category
+            </label>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
+            >
+              <option value="">Uncategorized</option>
+              {PERSONAL_EXPENSE_CATEGORIES.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Recipient Contact & Payment Method for Payments */}

@@ -3,6 +3,7 @@ import { db } from '@/data/firebase/firestoreClient';
 import {
   Account,
   Allocation,
+  CategoryBudget,
   Contact,
   Obligation,
   Payment,
@@ -34,6 +35,7 @@ export interface BackupDataPayload {
   payments: Payment[];
   allocations: Allocation[];
   transactions: Transaction[];
+  budgets?: CategoryBudget[];
 }
 
 export interface BackupEnvelope {
@@ -182,6 +184,7 @@ async function fetchAllActiveData(userId: string): Promise<BackupDataPayload> {
     payments: byCollection.payments as Payment[],
     allocations: byCollection.allocations as Allocation[],
     transactions: byCollection.transactions as Transaction[],
+    budgets: byCollection.budgets as CategoryBudget[],
   };
 }
 
@@ -200,6 +203,7 @@ export async function exportFullBackupJson(
     payments: data.payments.length,
     allocations: data.allocations.length,
     transactions: data.transactions.length,
+    budgets: (data.budgets ?? []).length,
   };
   const totalRecords = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
@@ -782,11 +786,14 @@ export function parseAndValidateBackup(rawText: string): BackupValidationResult 
   }
 
   const rawData = obj.data as Record<string, unknown>;
+  const normalizedData: Record<string, unknown[]> = {};
   const counts = {} as Record<UserCollectionName, number>;
   let totalRecords = 0;
 
   for (const colName of USER_DATA_COLLECTIONS) {
-    const items = rawData[colName];
+    const rawItems = rawData[colName];
+    // Backward-compatible: older v0.3.0 backups did not include optional `budgets`
+    const items = rawItems === undefined && colName === 'budgets' ? [] : rawItems;
     if (!Array.isArray(items)) {
       return {
         valid: false,
@@ -810,6 +817,7 @@ export function parseAndValidateBackup(rawText: string): BackupValidationResult 
       }
     }
 
+    normalizedData[colName] = items;
     counts[colName] = items.length;
     totalRecords += items.length;
   }
@@ -819,7 +827,7 @@ export function parseAndValidateBackup(rawText: string): BackupValidationResult 
     appVersion: typeof obj.appVersion === 'string' ? obj.appVersion : 'unknown',
     exportedAt: typeof obj.exportedAt === 'string' ? obj.exportedAt : '',
     counts,
-    data: rawData as unknown as BackupDataPayload,
+    data: normalizedData as unknown as BackupDataPayload,
   };
 
   return { valid: true, envelope, totalRecords };
@@ -874,7 +882,7 @@ export async function planSmartRestore(
     });
 
     const summary: CollectionRestoreSummary = { toImport: 0, toUpdate: 0, skipped: 0 };
-    const backupItems = envelope.data[colName] as unknown as Array<Record<string, unknown>>;
+    const backupItems = (envelope.data[colName] ?? []) as unknown as Array<Record<string, unknown>>;
 
     for (const rawItem of backupItems) {
       totalInBackup += 1;

@@ -68,6 +68,7 @@ function createValidEnvelope(overrides?: Partial<BackupEnvelope>): BackupEnvelop
       payments: 0,
       allocations: 0,
       transactions: 1,
+      budgets: 0,
     },
     data: {
       projects: [

@@ -3,7 +3,9 @@ import {
   Transaction, 
   Obligation, 
   Payment, 
-  MaterialDetails 
+  MaterialDetails,
+  CategoryBudget,
+  BudgetPeriod
 } from '../entities';
 import { AllocationEngine } from '../accounting/allocationEngine';
 import { generateEntityId } from '../utils/id';
@@ -235,6 +237,31 @@ export class DomainUseCases {
       ...tx,
       status: 'voided',
       updatedAt: new Date().toISOString(),
+    };
+  }
+
+  static createCategoryBudget(params: {
+    categoryId: string;
+    categoryLabel: string;
+    period: BudgetPeriod;
+    limitMinor: number;
+  }): CategoryBudget {
+    if (!params.categoryId.trim()) {
+      throw new Error('[CreateCategoryBudget] Category is required.');
+    }
+    if (params.limitMinor <= 0) {
+      throw new Error('[CreateCategoryBudget] Budget limit must be greater than zero.');
+    }
+
+    const now = new Date().toISOString();
+    return {
+      id: generateEntityId('bdg'),
+      categoryId: params.categoryId.trim().toLowerCase(),
+      categoryLabel: params.categoryLabel.trim(),
+      period: params.period,
+      limitMinor: Math.round(params.limitMinor),
+      createdAt: now,
+      updatedAt: now,
     };
   }
 }

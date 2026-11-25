@@ -17,6 +17,7 @@ export const USER_DATA_COLLECTIONS = [
   'payments',
   'allocations',
   'transactions',
+  'budgets',
 ] as const;
 
 export type UserDataCollectionName = (typeof USER_DATA_COLLECTIONS)[number];

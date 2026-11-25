@@ -73,6 +73,7 @@ html.dark .dark\:bg-background {
   textarea,
   select {
     font-size: 16px !important;
+    line-height: 1.4 !important;
   }
 }
 
@@ -189,7 +190,12 @@ body.modal-open .fixed.inset-0.z-50:not([data-bottom-sheet="true"]) {
   background-position: right 0.75rem center;
   background-repeat: no-repeat;
   background-size: 1.25em 1.25em;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
   padding-right: 2.25rem;
+  min-height: 2.75rem;
+  height: auto !important;
+  line-height: 1.4 !important;
   transition: background-color 200ms ease;
 }
 

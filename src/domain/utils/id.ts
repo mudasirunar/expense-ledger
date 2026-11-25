@@ -10,6 +10,7 @@ export type EntityIdPrefix =
   | 'obl'
   | 'pay'
   | 'alloc'
+  | 'bdg'
   | 'idem-tx'
   | 'idem-pay';
 

@@ -75,7 +75,7 @@
 - [x] Build Executive Dashboard with dynamic time horizons (`All Time`, `This Month`, `Today`), scope filters (`All`, `Personal`, Projects), Cash Flow Trend chart, Spending Donut, Liquidity Mix (top 5), Project Budget Health (top 5 with 80%/90%/100% thresholds), Payables/Receivables, and Recent Activity (last 5).
 - [x] Build standalone History screen (`#/history`) with Transaction Detail Bottom Sheet & 9:16 Bank Slip PNG receipt sharing (`receiptShareService.ts`).
 - [ ] Build normalized in-memory search across all financial entities.
-- [ ] Build dedicated periodic Budget engine (Personal category budgets + visual warning alerts). *(Project budget 80%/90%/100% alerts already live on Dashboard)*
+- [x] Build dedicated periodic Budget engine (Personal category budgets + 80%/90%/100% visual warning alerts + Quick Add category picker + live Dashboard section). *(Project budget 80%/90%/100% alerts also live on Dashboard)*
 - [ ] Build Financial Reports (P&L, Cash Flow, Project Cost Comparisons).
 - [x] Build styled Multi-Sheet Excel Export (`.xlsx`: Summary, Expenses & Income, Transfers, Bills, Payments) + RFC-4180 CSV builder (`backupRestoreService.ts`).
 - [x] Build JSON backup export and validated Smart-Merge restore preview (`backupRestoreService.ts`).

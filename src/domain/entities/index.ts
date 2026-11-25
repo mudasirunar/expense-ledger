@@ -140,3 +140,16 @@ export interface Transaction extends SoftDeletable {
   readonly updatedAt: string;
 }
 
+export type BudgetPeriod = 'monthly' | 'weekly';
+
+export interface CategoryBudget extends SoftDeletable {
+  readonly id: string;
+  readonly categoryId: string;
+  readonly categoryLabel: string;
+  readonly period: BudgetPeriod;
+  readonly limitMinor: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+

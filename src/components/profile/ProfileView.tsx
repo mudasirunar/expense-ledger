@@ -33,6 +33,7 @@ const COLLECTION_LABELS: Record<UserCollectionName, string> = {
   obligations: 'Obligations',
   payments: 'Payments',
   allocations: 'Allocations',
+  budgets: 'Budgets',
 };
 
 export const ProfileView: React.FC = () => {
