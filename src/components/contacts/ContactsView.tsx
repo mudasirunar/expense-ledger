@@ -187,15 +187,15 @@ export const ContactsView: React.FC = () => {
           ))}
         </div>
       ) : contacts.length === 0 ? (
-        <Glass className="p-8 text-center space-y-3 rounded-2xl">
-          <Users className="w-12 h-12 text-[var(--lg-muted)] mx-auto opacity-60" />
+        <div className="py-12 flex flex-col items-center justify-center px-4 text-center space-y-3">
+          <Users className="w-11 h-11 text-[var(--lg-muted)] mx-auto opacity-50" />
           <div>
             <p className="text-sm font-bold text-[var(--lg-foreground)]">No contacts saved yet</p>
             <p className="text-xs text-[var(--lg-muted)] max-w-xs mx-auto mt-1 leading-relaxed">
               Register contractors, cement/steel suppliers, and site workers to track obligations and immediate payment records.
             </p>
           </div>
-          <div className="pt-2">
+          <div className="pt-1">
             <Button
               variant="filled"
               tint="#2563EB"
@@ -206,7 +206,7 @@ export const ContactsView: React.FC = () => {
               Add First Contact
             </Button>
           </div>
-        </Glass>
+        </div>
       ) : (
         <div className="space-y-3">
           {contacts.map((contact) => (

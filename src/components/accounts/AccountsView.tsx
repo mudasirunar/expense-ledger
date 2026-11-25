@@ -286,15 +286,15 @@ export const AccountsView: React.FC = () => {
           ))}
         </div>
       ) : accounts.length === 0 ? (
-        <Glass className="p-8 text-center space-y-3 rounded-2xl">
-          <Wallet className="w-12 h-12 text-[var(--lg-muted)] mx-auto opacity-60" />
+        <div className="min-h-[42vh] flex flex-col items-center justify-center px-4 text-center space-y-3">
+          <Wallet className="w-11 h-11 text-[var(--lg-muted)] mx-auto opacity-50" />
           <div>
             <p className="text-sm font-bold text-[var(--lg-foreground)]">No accounts configured</p>
             <p className="text-xs text-[var(--lg-muted)] max-w-xs mx-auto mt-1 leading-relaxed">
               Add your cash in hand, bank accounts, or mobile wallets (EasyPaisa/JazzCash) to start recording cash flow.
             </p>
           </div>
-          <div className="pt-2">
+          <div className="pt-1">
             <Button
               variant="filled"
               tint="#2563EB"
@@ -305,7 +305,7 @@ export const AccountsView: React.FC = () => {
               Create Account
             </Button>
           </div>
-        </Glass>
+        </div>
       ) : (
         <div className="space-y-3">
           {accounts.map((acc) => (

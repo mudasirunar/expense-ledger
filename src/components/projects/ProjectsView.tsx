@@ -179,15 +179,15 @@ export const ProjectsView: React.FC = () => {
           ))}
         </div>
       ) : projects.length === 0 ? (
-        <Glass className="p-8 text-center space-y-3 rounded-2xl">
-          <Building2 className="w-12 h-12 text-[var(--lg-muted)] mx-auto opacity-60" />
+        <div className="min-h-[58vh] flex flex-col items-center justify-center px-4 text-center space-y-3">
+          <Building2 className="w-11 h-11 text-[var(--lg-muted)] mx-auto opacity-50" />
           <div>
             <p className="text-sm font-bold text-[var(--lg-foreground)]">No projects registered yet</p>
             <p className="text-xs text-[var(--lg-muted)] max-w-xs mx-auto mt-1 leading-relaxed">
               Create a dedicated project to track materials, labor wages, and contractor obligations with zero co-mingling.
             </p>
           </div>
-          <div className="pt-2">
+          <div className="pt-1">
             <Button
               variant="filled"
               tint="#2563EB"
@@ -198,7 +198,7 @@ export const ProjectsView: React.FC = () => {
               Add First Project
             </Button>
           </div>
-        </Glass>
+        </div>
       ) : (
         <div className="space-y-3">
           {projects.map((project) => (
