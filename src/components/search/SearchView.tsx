@@ -123,11 +123,26 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollBodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chipRowRef = useRef<HTMLDivElement>(null);
+  const chipRefs = useRef<Map<SearchFilterCategory, HTMLButtonElement>>(new Map());
 
   // Sync recent searches when user changes
   useEffect(() => {
     setRecentSearches(loadRecentSearches(userId));
   }, [userId]);
+
+  // Smoothly center the active filter chip horizontally
+  useEffect(() => {
+    const row = chipRowRef.current;
+    const chip = chipRefs.current.get(filter);
+    if (!row || !chip) return;
+    const targetLeft = Math.max(0, chip.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2);
+    if (typeof row.scrollTo === 'function') {
+      row.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    } else {
+      row.scrollLeft = targetLeft;
+    }
+  }, [filter]);
 
   // Prevent iOS Safari / Standalone PWA from panning the visual viewport off-screen
   // when swiping on the header, empty state, or short result lists while the keyboard is open.
@@ -524,6 +539,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
             <>
               {/* Filter Chips */}
               <div
+                ref={chipRowRef}
                 data-search-chips="true"
                 className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 flex-shrink-0"
               >
@@ -540,6 +556,10 @@ export const SearchView: React.FC<SearchViewProps> = ({ onBack }) => {
                   return (
                     <button
                       key={chip.id}
+                      ref={(el) => {
+                        if (el) chipRefs.current.set(chip.id, el);
+                        else chipRefs.current.delete(chip.id);
+                      }}
                       type="button"
                       onClick={() => setFilter(chip.id)}
                       className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${

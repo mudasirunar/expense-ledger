@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowLeftRight,
@@ -86,6 +86,20 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ onBa
   const [activeTab, setActiveTab] = useState<ReportTab>('pnl');
   const [period, setPeriod] = useState<ReportPeriod>('all');
   const [isExporting, setIsExporting] = useState<boolean>(false);
+  const periodRowRef = useRef<HTMLDivElement>(null);
+  const periodChipRefs = useRef<Map<ReportPeriod, HTMLButtonElement>>(new Map());
+
+  useEffect(() => {
+    const row = periodRowRef.current;
+    const chip = periodChipRefs.current.get(period);
+    if (!row || !chip) return;
+    const targetLeft = Math.max(0, chip.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2);
+    if (typeof row.scrollTo === 'function') {
+      row.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    } else {
+      row.scrollLeft = targetLeft;
+    }
+  }, [period]);
 
   const [accounts, setAccounts] = useState<Account[]>(() =>
     hasWarmCache ? cachedReports!.accounts : []
@@ -301,12 +315,19 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ onBa
           </div>
 
           {/* Period Chips */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+          <div
+            ref={periodRowRef}
+            className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5"
+          >
             {PERIOD_OPTIONS.map((opt) => {
               const active = period === opt.value;
               return (
                 <button
                   key={opt.value}
+                  ref={(el) => {
+                    if (el) periodChipRefs.current.set(opt.value, el);
+                    else periodChipRefs.current.delete(opt.value);
+                  }}
                   type="button"
                   onClick={() => setPeriod(opt.value)}
                   className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${

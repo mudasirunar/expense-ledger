@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowLeftRight,
@@ -64,6 +64,16 @@ function formatDateGroupLabel(dateKey: string): string {
   return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+type HistoryTypeFilter = 'all' | 'expense' | 'income' | 'transfer' | 'bill' | 'payment';
+
+function getItemCategory(item: ActivityFeedItem): Exclude<HistoryTypeFilter, 'all'> {
+  if (item.kind === 'obligation') return 'bill';
+  if (item.kind === 'payment') return 'payment';
+  if (item.direction === 'neutral') return 'transfer';
+  if (item.direction === 'in') return 'income';
+  return 'expense';
+}
+
 interface HistoryViewProps {
   onBack: () => void;
 }
@@ -96,6 +106,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
   );
   const [loading, setLoading] = useState<boolean>(() => !hasWarmCache);
   const [selectedItem, setSelectedItem] = useState<ActivityFeedItem | null>(null);
+  const [typeFilter, setTypeFilter] = useState<HistoryTypeFilter>('all');
+  const chipRowRef = useRef<HTMLDivElement>(null);
+  const chipRefs = useRef<Map<HistoryTypeFilter, HTMLButtonElement>>(new Map());
 
   const handleExportExcel = async () => {
     if (!user?.uid || isExportingCsv) return;
@@ -243,11 +256,43 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     [accounts, projects, transactions, obligations, payments]
   );
 
+  const typeCounts = useMemo(() => {
+    const counts: Record<HistoryTypeFilter, number> = {
+      all: feed.length,
+      expense: 0,
+      income: 0,
+      transfer: 0,
+      bill: 0,
+      payment: 0,
+    };
+    for (const item of feed) {
+      counts[getItemCategory(item)] += 1;
+    }
+    return counts;
+  }, [feed]);
+
+  const filteredFeed = useMemo(() => {
+    if (typeFilter === 'all') return feed;
+    return feed.filter((item) => getItemCategory(item) === typeFilter);
+  }, [feed, typeFilter]);
+
+  useEffect(() => {
+    const row = chipRowRef.current;
+    const chip = chipRefs.current.get(typeFilter);
+    if (!row || !chip) return;
+    const targetLeft = Math.max(0, chip.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2);
+    if (typeof row.scrollTo === 'function') {
+      row.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    } else {
+      row.scrollLeft = targetLeft;
+    }
+  }, [typeFilter]);
+
   const groupedFeed = useMemo(() => {
     const groups: Array<{ dateKey: string; label: string; items: ActivityFeedItem[] }> = [];
     const byKey = new Map<string, ActivityFeedItem[]>();
 
-    for (const item of feed) {
+    for (const item of filteredFeed) {
       const key = item.date || 'recent';
       if (!byKey.has(key)) {
         const list: ActivityFeedItem[] = [];
@@ -258,7 +303,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     }
 
     return groups;
-  }, [feed]);
+  }, [filteredFeed]);
 
   return (
     <div className="flex flex-col app-screen w-full bg-[#E2DDD5] dark:bg-background text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
@@ -300,7 +345,47 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
         </header>
 
         {/* Flat-on-screen list of all transactions (no cards, no horizontal divider lines) */}
-        <main className="max-w-md mx-auto w-full px-4 pt-3 pb-12">
+        <main className="max-w-md mx-auto w-full px-4 pt-2 pb-12 space-y-4">
+          {/* Record Type Filter Chips */}
+          {!loading && feed.length > 0 && (
+            <div
+              ref={chipRowRef}
+              className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5"
+            >
+              {(
+                [
+                  { id: 'all', label: 'All' },
+                  { id: 'expense', label: 'Expenses' },
+                  { id: 'income', label: 'Income' },
+                  { id: 'transfer', label: 'Transfers' },
+                  { id: 'bill', label: 'Bills' },
+                  { id: 'payment', label: 'Payments' },
+                ] as Array<{ id: HistoryTypeFilter; label: string }>
+              ).map((chip) => {
+                const active = typeFilter === chip.id;
+                const count = typeCounts[chip.id];
+                return (
+                  <button
+                    key={chip.id}
+                    ref={(el) => {
+                      if (el) chipRefs.current.set(chip.id, el);
+                      else chipRefs.current.delete(chip.id);
+                    }}
+                    type="button"
+                    onClick={() => setTypeFilter(chip.id)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+                      active
+                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/25'
+                        : 'bg-[var(--lg-glass)] text-[var(--lg-muted)] border border-[var(--lg-edge)] hover:text-[var(--lg-foreground)]'
+                    }`}
+                  >
+                    {chip.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {loading ? (
             <div className="space-y-4 animate-pulse pt-2">
               {[1, 2, 3, 4, 5].map((i) => (
@@ -317,12 +402,18 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
               ))}
             </div>
           ) : groupedFeed.length === 0 ? (
-            <div className="min-h-[62vh] flex flex-col items-center justify-center px-4 text-center space-y-3">
+            <div className="min-h-[56vh] flex flex-col items-center justify-center px-4 text-center space-y-3">
               <Clock className="w-11 h-11 text-[var(--lg-muted)] opacity-50" />
               <div>
-                <p className="text-sm font-bold text-[var(--lg-foreground)]">No transactions yet</p>
+                <p className="text-sm font-bold text-[var(--lg-foreground)]">
+                  {typeFilter === 'all'
+                    ? 'No transactions yet'
+                    : `No ${typeFilter === 'income' ? 'income' : `${typeFilter}s`} yet`}
+                </p>
                 <p className="text-xs text-[var(--lg-muted)] max-w-xs mx-auto mt-1 leading-relaxed">
-                  All recorded expenses, income, transfers, bills, and settlements will appear here.
+                  {typeFilter === 'all'
+                    ? 'All recorded expenses, income, transfers, bills, and settlements will appear here.'
+                    : 'Switch back to All or record a new entry to see it here.'}
                 </p>
               </div>
             </div>
