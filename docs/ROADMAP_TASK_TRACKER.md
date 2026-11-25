@@ -74,7 +74,7 @@
 ### Phase 5: Dashboard, Search, Budgets & Reports (`v0.3.0` In Progress)
 - [x] Build Executive Dashboard with dynamic time horizons (`All Time`, `This Month`, `Today`), scope filters (`All`, `Personal`, Projects), Cash Flow Trend chart, Spending Donut, Liquidity Mix (top 5), Project Budget Health (top 5 with 80%/90%/100% thresholds), Payables/Receivables, and Recent Activity (last 5).
 - [x] Build standalone History screen (`#/history`) with Transaction Detail Bottom Sheet & 9:16 Bank Slip PNG receipt sharing (`receiptShareService.ts`).
-- [ ] Build normalized in-memory search across all financial entities.
+- [x] Build normalized in-memory search across all financial entities (`#/search` standalone screen with expanding search bar, external Glisse X button, recent searches + Clear All, live results, and top-bar trigger on Overview/Projects/Accounts).
 - [x] Build dedicated periodic Budget engine (Personal category budgets + 80%/90%/100% visual warning alerts + Quick Add category picker + live Dashboard section). *(Project budget 80%/90%/100% alerts also live on Dashboard)*
 - [x] Build Financial Reports standalone screen (`#/reports`: P&L, Cash Flow, Project Cost Comparisons + 3-sheet period Excel export, accessible from Profile).
 - [x] Build styled Multi-Sheet Excel Export (`.xlsx`: Summary, Expenses & Income, Transfers, Bills, Payments) + RFC-4180 CSV builder (`backupRestoreService.ts`).

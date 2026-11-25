@@ -12,6 +12,7 @@ import { QuickAddModal } from '@/components/entry/QuickAddModal';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { HistoryView } from '@/components/history/HistoryView';
 import { FinancialReportsView } from '@/components/reports/FinancialReportsView';
+import { SearchView } from '@/components/search/SearchView';
 
 const VALID_TABS: NavTab[] = ['dashboard', 'projects', 'accounts', 'profile'];
 const LAST_TAB_STORAGE_KEY = 'ledger_last_tab';
@@ -19,7 +20,8 @@ const LAST_TAB_STORAGE_KEY = 'ledger_last_tab';
 type AppRoute =
   | { screen: 'tabs'; tab: NavTab }
   | { screen: 'history' }
-  | { screen: 'reports' };
+  | { screen: 'reports' }
+  | { screen: 'search' };
 
 // Every screen has its own hash route so reloads and back/forward stay on the same screen.
 // Legacy '#/contacts' now lives on the Overview screen.
@@ -28,6 +30,7 @@ function parseHashRoute(): AppRoute | null {
   const raw = window.location.hash.replace(/^#\/?/, '').toLowerCase();
   if (raw === 'history') return { screen: 'history' };
   if (raw === 'reports') return { screen: 'reports' };
+  if (raw === 'search') return { screen: 'search' };
   if (raw === 'contacts') return { screen: 'tabs', tab: 'dashboard' };
   if (VALID_TABS.includes(raw as NavTab)) return { screen: 'tabs', tab: raw as NavTab };
   return null;
@@ -63,9 +66,10 @@ export const AppContent: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>(() =>
     initialRoute?.screen === 'tabs' ? initialRoute.tab : getSavedTab()
   );
-  const [standaloneScreen, setStandaloneScreen] = useState<'history' | 'reports' | null>(() => {
+  const [standaloneScreen, setStandaloneScreen] = useState<'history' | 'reports' | 'search' | null>(() => {
     if (initialRoute?.screen === 'history') return 'history';
     if (initialRoute?.screen === 'reports') return 'reports';
+    if (initialRoute?.screen === 'search') return 'search';
     return null;
   });
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
@@ -78,7 +82,9 @@ export const AppContent: React.FC = () => {
         ? '#/history'
         : standaloneScreen === 'reports'
           ? '#/reports'
-          : `#/${currentTab}`;
+          : standaloneScreen === 'search'
+            ? '#/search'
+            : `#/${currentTab}`;
     if (window.location.hash !== targetHash) {
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${targetHash}`);
     }
@@ -96,6 +102,8 @@ export const AppContent: React.FC = () => {
         setStandaloneScreen('history');
       } else if (route.screen === 'reports') {
         setStandaloneScreen('reports');
+      } else if (route.screen === 'search') {
+        setStandaloneScreen('search');
       } else {
         setStandaloneScreen(null);
         setCurrentTab(route.tab);
@@ -132,6 +140,14 @@ export const AppContent: React.FC = () => {
     }
   };
 
+  const handleOpenSearch = () => {
+    persistTab(currentTab);
+    setStandaloneScreen('search');
+    if (window.location.hash !== '#/search') {
+      window.location.hash = '#/search';
+    }
+  };
+
   const handleBackFromStandalone = () => {
     const returnTab = currentTab || getSavedTab();
     setStandaloneScreen(null);
@@ -149,12 +165,17 @@ export const AppContent: React.FC = () => {
     return <FinancialReportsView onBack={handleBackFromStandalone} />;
   }
 
+  if (standaloneScreen === 'search') {
+    return <SearchView onBack={handleBackFromStandalone} />;
+  }
+
   return (
     <>
       <MobileAppLayout
         currentTab={currentTab}
         onTabChange={handleTabChange}
         onQuickAdd={() => setIsQuickAddOpen(true)}
+        onOpenSearch={handleOpenSearch}
         title={TAB_TITLES[currentTab]}
       >
         {currentTab === 'dashboard' && (

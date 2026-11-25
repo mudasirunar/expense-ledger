@@ -15,6 +15,7 @@ interface MobileAppLayoutProps {
   currentTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   onQuickAdd: () => void;
+  onOpenSearch?: () => void;
   title: string;
   subtitle?: string;
   children: React.ReactNode;
@@ -24,6 +25,7 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({
   currentTab,
   onTabChange,
   onQuickAdd,
+  onOpenSearch,
   title,
   subtitle,
   children
@@ -83,7 +85,11 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({
         scrollContainerRef={scrollContainerRef}
         autoRefreshRef={autoRefreshRef}
       >
-        <TopHeader title={title} subtitle={subtitle} />
+        <TopHeader
+          title={title}
+          subtitle={subtitle}
+          onOpenSearch={currentTab !== 'profile' ? onOpenSearch : undefined}
+        />
 
         <main className="max-w-md mx-auto w-full px-4 pt-3 pb-24">
           {children}
