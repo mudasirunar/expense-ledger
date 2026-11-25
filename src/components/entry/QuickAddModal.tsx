@@ -9,6 +9,7 @@ import {
   FirestorePaymentRepository
 } from '@/data/repositories/firestore';
 import { DomainUseCases } from '@/domain/usecases';
+import { Money } from '@/domain/accounting/money';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useSnackbar } from '@/app/providers/SnackbarProvider';
 import { Button, Input, SegmentedControl } from 'glisse';
@@ -73,7 +74,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
   // Material purchase specific
   const [itemName, setItemName] = useState<string>('');
   const [quantity, setQuantity] = useState<string>('');
-  const [unit, setUnit] = useState<string>('bags');
+  const [unit, setUnit] = useState<string>('');
   const [unitPriceStr, setUnitPriceStr] = useState<string>('');
 
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -98,6 +99,19 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
   }, [isOpen, userId]);
 
   if (!isOpen) return null;
+
+  // Auto-calculate Total Amount from Qty x Unit Price on the Bill tab using integer minor units
+  const syncBillTotal = (nextQtyStr: string, nextUnitPriceStr: string) => {
+    const qtyVal = Number(nextQtyStr);
+    const unitPriceVal = Number(nextUnitPriceStr);
+    if (!Number.isFinite(qtyVal) || !Number.isFinite(unitPriceVal) || qtyVal <= 0 || unitPriceVal <= 0) {
+      return;
+    }
+    const unitPriceMinor = Money.fromMajor(unitPriceVal).minorUnits;
+    const totalMinor = Math.round(qtyVal * unitPriceMinor);
+    const formatted = Money.toMajorString(totalMinor);
+    setAmountStr(formatted.endsWith('.00') ? formatted.slice(0, -3) : formatted);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,9 +170,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
         await awaitLocalCommit(Promise.all(writes));
       } else if (entryType === 'obligation') {
         if (!title.trim() && !itemName.trim()) throw new Error('Obligation title is required.');
-        const unitPriceVal = parseFloat(unitPriceStr) || 0;
-        const qtyVal = parseFloat(quantity) || 1;
-        const totalMinor = amountMinor > 0 ? amountMinor : Math.round(unitPriceVal * qtyVal * 100);
+        const unitPriceVal = Number(unitPriceStr) || 0;
+        const unitPriceMinor = unitPriceVal > 0 ? Money.fromMajor(unitPriceVal).minorUnits : 0;
+        const qtyVal = Number(quantity) || 1;
+        const totalMinor = amountMinor > 0 ? amountMinor : Math.round(unitPriceMinor * qtyVal);
 
         if (totalMinor <= 0) throw new Error('Total obligation amount must be greater than zero.');
 
@@ -172,7 +187,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
             itemName: itemName.trim(),
             quantity: qtyVal,
             unit: unit.trim() || 'units',
-            unitPriceMinor: Math.round(unitPriceVal * 100),
+            unitPriceMinor,
           } : undefined,
           notes: notes.trim() || undefined,
         });
@@ -238,7 +253,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
               items={[
                 { value: 'expense', label: 'Expense' },
                 { value: 'income', label: 'Income' },
-                { value: 'obligation', label: 'Bill / PO' },
+                { value: 'obligation', label: 'Bill' },
                 { value: 'payment', label: 'Payment' },
               ]}
               value={entryType}
@@ -284,7 +299,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                   type="number"
                   placeholder="100"
                   value={quantity}
-                  onValueChange={setQuantity}
+                  onValueChange={(val) => {
+                    setQuantity(val);
+                    syncBillTotal(val, unitPriceStr);
+                  }}
                   className="!max-w-none"
                 />
               </div>
@@ -293,7 +311,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                   Unit
                 </label>
                 <Input
-                  placeholder="bags"
+                  placeholder="pcs"
                   value={unit}
                   onValueChange={setUnit}
                   className="!max-w-none"
@@ -307,7 +325,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                   type="number"
                   placeholder="Rs"
                   value={unitPriceStr}
-                  onValueChange={setUnitPriceStr}
+                  onValueChange={(val) => {
+                    setUnitPriceStr(val);
+                    syncBillTotal(quantity, val);
+                  }}
                   className="!max-w-none"
                 />
               </div>

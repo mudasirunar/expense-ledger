@@ -10,17 +10,21 @@ import { ProjectsView } from '@/components/projects/ProjectsView';
 import { AccountsView } from '@/components/accounts/AccountsView';
 import { QuickAddModal } from '@/components/entry/QuickAddModal';
 import { ProfileView } from '@/components/profile/ProfileView';
+import { HistoryView } from '@/components/history/HistoryView';
 
 const VALID_TABS: NavTab[] = ['dashboard', 'projects', 'accounts', 'profile'];
 const LAST_TAB_STORAGE_KEY = 'ledger_last_tab';
 
-// Every bottom-bar screen has its own hash route so reloads and back/forward stay on the same screen.
+type AppRoute = { screen: 'tabs'; tab: NavTab } | { screen: 'history' };
+
+// Every screen has its own hash route so reloads and back/forward stay on the same screen.
 // Legacy '#/contacts' now lives on the Overview screen.
-function parseHashRoute(): NavTab | null {
+function parseHashRoute(): AppRoute | null {
   if (typeof window === 'undefined') return null;
   const raw = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-  if (raw === 'contacts') return 'dashboard';
-  if (VALID_TABS.includes(raw as NavTab)) return raw as NavTab;
+  if (raw === 'history') return { screen: 'history' };
+  if (raw === 'contacts') return { screen: 'tabs', tab: 'dashboard' };
+  if (VALID_TABS.includes(raw as NavTab)) return { screen: 'tabs', tab: raw as NavTab };
   return null;
 }
 
@@ -50,24 +54,38 @@ const TAB_TITLES: Record<NavTab, string> = {
 };
 
 export const AppContent: React.FC = () => {
-  const [currentTab, setCurrentTab] = useState<NavTab>(() => parseHashRoute() ?? getSavedTab());
+  const initialRoute = parseHashRoute();
+  const [currentTab, setCurrentTab] = useState<NavTab>(() =>
+    initialRoute?.screen === 'tabs' ? initialRoute.tab : getSavedTab()
+  );
+  const [isHistoryScreen, setIsHistoryScreen] = useState<boolean>(
+    () => initialRoute?.screen === 'history'
+  );
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
   // Make sure the URL always reflects the current screen (also normalizes empty / legacy hashes)
   useEffect(() => {
-    const targetHash = `#/${currentTab}`;
+    const targetHash = isHistoryScreen ? '#/history' : `#/${currentTab}`;
     if (window.location.hash !== targetHash) {
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${targetHash}`);
     }
-    persistTab(currentTab);
-  }, [currentTab]);
+    if (!isHistoryScreen) {
+      persistTab(currentTab);
+    }
+  }, [currentTab, isHistoryScreen]);
 
   // Sync with browser hash navigation (supports native back/forward)
   useEffect(() => {
     const handleHashChange = () => {
-      const tab = parseHashRoute();
-      if (tab) setCurrentTab(tab);
+      const route = parseHashRoute();
+      if (!route) return;
+      if (route.screen === 'history') {
+        setIsHistoryScreen(true);
+      } else {
+        setIsHistoryScreen(false);
+        setCurrentTab(route.tab);
+      }
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -75,6 +93,7 @@ export const AppContent: React.FC = () => {
   }, []);
 
   const handleTabChange = (tab: NavTab) => {
+    setIsHistoryScreen(false);
     setCurrentTab(tab);
     persistTab(tab);
     const targetHash = `#/${tab}`;
@@ -82,6 +101,27 @@ export const AppContent: React.FC = () => {
       window.location.hash = targetHash;
     }
   };
+
+  const handleOpenHistory = () => {
+    persistTab(currentTab);
+    setIsHistoryScreen(true);
+    if (window.location.hash !== '#/history') {
+      window.location.hash = '#/history';
+    }
+  };
+
+  const handleBackFromHistory = () => {
+    const returnTab = currentTab || getSavedTab();
+    setIsHistoryScreen(false);
+    const targetHash = `#/${returnTab}`;
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash;
+    }
+  };
+
+  if (isHistoryScreen) {
+    return <HistoryView onBack={handleBackFromHistory} />;
+  }
 
   return (
     <>
@@ -95,6 +135,7 @@ export const AppContent: React.FC = () => {
           <DashboardView
             onRefreshKey={refreshKey}
             onNavigateTab={(tab) => handleTabChange(tab)}
+            onOpenHistory={handleOpenHistory}
           />
         )}
         {currentTab === 'projects' && <ProjectsView />}

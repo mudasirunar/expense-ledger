@@ -28,6 +28,7 @@ vi.mock('@/data/firebase/firestoreClient', () => ({
 }));
 
 import {
+  buildLedgerWorkbookSheets,
   buildTransactionsCsv,
   parseAndValidateBackup,
   planSmartRestore,
@@ -152,7 +153,7 @@ describe('Smart Merge Backup, Restore & CSV Export Service', () => {
     expect(parseAndValidateBackup(JSON.stringify(missingCollection)).valid).toBe(false);
   });
 
-  it('generates RFC-4180 escaped CSV with Date, Time, latest-first sorting, resolved names, and PKR amounts', () => {
+  it('generates RFC-4180 escaped CSV with Record, Date, Time, latest-first sorting across transactions, bills, and payments', () => {
     const env = createValidEnvelope();
     // Add a second transaction on the same date but later timestamp to verify latest-first time sort
     env.data.transactions.push({
@@ -168,16 +169,97 @@ describe('Smart Merge Backup, Restore & CSV Export Service', () => {
       createdAt: '2026-02-10T14:30:00.000Z',
       updatedAt: '2026-02-10T14:30:00.000Z',
     });
+    env.data.obligations.push({
+      id: 'obl-1',
+      type: 'purchase',
+      direction: 'payable',
+      projectId: 'proj-existing-newer',
+      title: '100 Bags Cement',
+      date: '2026-02-12',
+      totalAmountMinor: 12000000,
+      allocatedAmountMinor: 0,
+      remainingAmountMinor: 12000000,
+      status: 'unpaid',
+      createdAt: '2026-02-12T09:00:00.000Z',
+      updatedAt: '2026-02-12T09:00:00.000Z',
+    });
+    env.data.payments.push({
+      id: 'pay-1',
+      idempotencyKey: 'idem-pay-1',
+      direction: 'outgoing',
+      accountId: 'acc-1',
+      projectId: 'proj-existing-newer',
+      amountMinor: 4000000,
+      allocatedAmountMinor: 4000000,
+      unallocatedAmountMinor: 0,
+      date: '2026-02-11',
+      method: 'cash',
+      status: 'posted',
+      notes: 'First installment',
+      createdAt: '2026-02-11T10:00:00.000Z',
+      updatedAt: '2026-02-11T10:00:00.000Z',
+    });
 
     const csv = buildTransactionsCsv(env.data);
     const lines = csv.split('\r\n');
 
-    expect(lines[0]).toBe('Date,Time,Type,Scope,Amount (PKR),Status,Account,Target Account,Project,Contact,Notes');
-    // Later transaction on same date must appear first
-    expect(lines[1]).toMatch(/^2026-02-10,\d{2}:\d{2}:\d{2},income,personal,500\.00,posted,Main Cash \(Updated in Backup\),,,,Later deposit$/);
-    expect(lines[2]).toMatch(
-      /^2026-02-10,\d{2}:\d{2}:\d{2},expense,project,125\.50,posted,Main Cash \(Updated in Backup\),,Villa A \(Old Backup Name\),,"Cement, ""Grade A"""$/
+    expect(lines[0]).toBe('Date,Time,Record,Type,Scope,Amount (PKR),Status,Account,Target Account,Project,Contact,Notes');
+    // Latest-first: Feb 12 Bill -> Feb 11 Payment -> Feb 10 14:30 Income -> Feb 10 00:00 Expense
+    expect(lines[1]).toMatch(/^2026-02-12,\d{2}:\d{2}:\d{2},Bill,purchase,project,120000\.00,unpaid,,,Villa A \(Old Backup Name\),,100 Bags Cement$/);
+    expect(lines[2]).toMatch(/^2026-02-11,\d{2}:\d{2}:\d{2},Payment,outgoing,project,40000\.00,posted,Main Cash \(Updated in Backup\),,Villa A \(Old Backup Name\),,cash — First installment$/);
+    expect(lines[3]).toMatch(/^2026-02-10,\d{2}:\d{2}:\d{2},Transaction,income,personal,500\.00,posted,Main Cash \(Updated in Backup\),,,,Later deposit$/);
+    expect(lines[4]).toMatch(
+      /^2026-02-10,\d{2}:\d{2}:\d{2},Transaction,expense,project,125\.50,posted,Main Cash \(Updated in Backup\),,Villa A \(Old Backup Name\),,"Cement, ""Grade A"""$/
     );
+  });
+
+  it('builds 5 clean multi-sheet Excel tables (Summary, Expenses & Income, Transfers, Bills, Payments)', () => {
+    const env = createValidEnvelope();
+    env.data.transactions.push({
+      id: 'tx-transfer',
+      idempotencyKey: 'idem-tr-1',
+      type: 'transfer',
+      scope: 'personal',
+      accountId: 'acc-1',
+      targetAccountId: 'acc-1',
+      amountMinor: 25000,
+      date: '2026-02-15',
+      notes: 'Cash shift',
+      status: 'posted',
+      createdAt: '2026-02-15T10:00:00.000Z',
+      updatedAt: '2026-02-15T10:00:00.000Z',
+    });
+    env.data.obligations.push({
+      id: 'obl-1',
+      type: 'purchase',
+      direction: 'payable',
+      projectId: 'proj-existing-newer',
+      title: 'Cement',
+      date: '2026-02-12',
+      totalAmountMinor: 100000,
+      allocatedAmountMinor: 40000,
+      remainingAmountMinor: 60000,
+      status: 'partially_paid',
+      createdAt: '2026-02-12T09:00:00.000Z',
+      updatedAt: '2026-02-12T09:00:00.000Z',
+    });
+
+    const { sheets, totalEntries } = buildLedgerWorkbookSheets(env.data);
+    expect(sheets.map((s) => s.name)).toEqual([
+      'Summary',
+      'Expenses & Income',
+      'Transfers',
+      'Bills',
+      'Payments',
+    ]);
+    expect(totalEntries).toBe(3); // 1 expense + 1 transfer + 1 bill
+    // Expenses & Income sheet excludes transfers
+    expect(sheets[1].rows).toHaveLength(2); // header + 1 expense
+    // Transfers sheet has only transfers
+    expect(sheets[2].rows).toHaveLength(2); // header + 1 transfer
+    // Bills sheet has only bills with Paid/Remaining/Status
+    expect(sheets[3].rows).toHaveLength(2);
+    expect(sheets[3].rows[1]).toContain('Partially Paid');
   });
 
   it('plans smart merge: imports new & recovers previously deleted items (clearing deleted_records), skips equal/newer active IDs, and updates strictly newer backup items', async () => {

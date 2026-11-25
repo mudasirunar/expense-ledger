@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowLeftRight,
@@ -266,11 +266,13 @@ const CategoryDonutChart: React.FC<{
 interface DashboardViewProps {
   onRefreshKey: number;
   onNavigateTab?: (tab: 'projects' | 'accounts') => void;
+  onOpenHistory?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   onRefreshKey,
   onNavigateTab,
+  onOpenHistory,
 }) => {
   const { user } = useAuth();
   const userId = user?.uid || 'guest-user';
@@ -279,6 +281,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const [timeFilter, setTimeFilter] = useState<DashboardTimeHorizon>('all');
   const [scopeFilter, setScopeFilter] = useState<DashboardScopeFilter>('all');
+  const [pinSelectedProject, setPinSelectedProject] = useState<boolean>(true);
+  const chipRowRef = useRef<HTMLDivElement>(null);
+  const chipButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const [rawAccounts, setRawAccounts] = useState<Account[]>(() =>
     hasWarmCache ? cachedDashboard!.accounts : []
@@ -423,6 +428,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
   }, [rawProjects, scopeFilter]);
 
+  // Smoothly center the selected scope chip horizontally (without affecting vertical scroll)
+  useEffect(() => {
+    const row = chipRowRef.current;
+    const chip = chipButtonRefs.current.get(scopeFilter);
+    if (!row || !chip) return;
+    const targetLeft = Math.max(0, chip.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2);
+    if (typeof row.scrollTo === 'function') {
+      row.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    } else {
+      row.scrollLeft = targetLeft;
+    }
+  }, [scopeFilter, rawProjects]);
+
   const activeProjects = useMemo(
     () => rawProjects.filter((p) => p.status !== 'archived'),
     [rawProjects]
@@ -438,8 +456,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         payments: rawPayments,
         timeHorizon: timeFilter,
         scopeFilter,
+        pinSelectedProject,
       }),
-    [rawAccounts, rawProjects, rawTransactions, rawObligations, rawPayments, timeFilter, scopeFilter]
+    [rawAccounts, rawProjects, rawTransactions, rawObligations, rawPayments, timeFilter, scopeFilter, pinSelectedProject]
   );
 
   // Group recent activity by date label
@@ -492,7 +511,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Scope Context Pills (Combined / Personal / Individual Projects) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 -mx-1 px-1">
+      <div
+        ref={chipRowRef}
+        className="relative flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 -mx-1 px-1"
+      >
         {[
           { id: 'all', label: 'All' },
           { id: 'personal', label: 'Personal' },
@@ -502,8 +524,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           return (
             <button
               key={chip.id}
+              ref={(el) => {
+                if (el) chipButtonRefs.current.set(chip.id, el);
+                else chipButtonRefs.current.delete(chip.id);
+              }}
               type="button"
-              onClick={() => setScopeFilter(chip.id)}
+              onClick={() => {
+                setPinSelectedProject(true);
+                setScopeFilter(chip.id);
+              }}
               className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
                 selected
                   ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/25'
@@ -516,65 +545,84 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         })}
       </div>
 
-      {/* Primary Hero Glass Card: Dynamic per time horizon (All Time -> Net Cash Position; Month/Today -> Period Net Flow) */}
-      <Glass className="p-5 rounded-3xl space-y-4">
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-bold tracking-wider text-[var(--lg-muted)] uppercase">
-              {timeFilter === 'all'
-                ? 'Net Cash Position'
-                : timeFilter === 'month'
-                  ? 'This Month Net'
-                  : "Today's Net"}
-            </span>
+      {/* Primary Hero Glass Card: Overall Net Cash Position on All + All Time; Scoped/Period Net Flow otherwise */}
+      {(() => {
+        const isOverallAllTime = timeFilter === 'all' && scopeFilter === 'all';
+        const selectedProjectName =
+          scopeFilter !== 'all' && scopeFilter !== 'personal'
+            ? activeProjects.find((p) => p.id === scopeFilter)?.name || 'Project'
+            : null;
+        const periodLabel =
+          timeFilter === 'all' ? 'All Time' : timeFilter === 'month' ? 'This Month' : 'Today';
+        const heroTitle = isOverallAllTime
+          ? 'Net Cash Position'
+          : scopeFilter === 'all'
+            ? timeFilter === 'month'
+              ? 'This Month Net'
+              : "Today's Net"
+            : scopeFilter === 'personal'
+              ? timeFilter === 'all'
+                ? 'Personal Net'
+                : `Personal • ${periodLabel}`
+              : timeFilter === 'all'
+                ? `${selectedProjectName} Net`
+                : `${selectedProjectName} • ${periodLabel}`;
 
-            {!loading &&
-              (timeFilter === 'all' ? (
-                (analytics.totalInflowMinor > 0 || analytics.totalOutflowMinor > 0) && (
-                  <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold tabular-nums ${
-                      analytics.netFlowMinor >= 0
-                        ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-rose-500/12 text-rose-600 dark:text-rose-400'
-                    }`}
-                  >
-                    {analytics.netFlowMinor >= 0 ? '+' : ''}
-                    {Money.format(analytics.netFlowMinor)}
-                    {analytics.savingsRatePct !== null && (
-                      <span className="opacity-75">({analytics.savingsRatePct}%)</span>
-                    )}
-                  </span>
-                )
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tabular-nums bg-[var(--lg-muted)]/10 text-[var(--lg-muted)]">
-                  Cash {Money.format(analytics.totalCashMinor)}
+        return (
+          <Glass className="p-5 rounded-3xl space-y-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold tracking-wider text-[var(--lg-muted)] uppercase truncate">
+                  {heroTitle}
                 </span>
-              ))}
-          </div>
 
-          <div
-            className={`text-[32px] leading-tight font-black tabular-nums tracking-tight ${
-              timeFilter === 'all' || analytics.netFlowMinor === 0
-                ? 'text-[var(--lg-foreground)]'
-                : analytics.netFlowMinor > 0
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-rose-600 dark:text-rose-400'
-            }`}
-          >
-            {loading ? (
-              <span className="inline-flex items-center text-[var(--lg-foreground)]">
-                Rs <LoadingDots size="md" />
-              </span>
-            ) : timeFilter === 'all' ? (
-              Money.format(analytics.totalCashMinor)
-            ) : (
-              <>
-                {analytics.netFlowMinor > 0 ? '+' : ''}
-                {Money.format(analytics.netFlowMinor)}
-              </>
-            )}
-          </div>
-        </div>
+                {!loading &&
+                  (isOverallAllTime ? (
+                    (analytics.totalInflowMinor > 0 || analytics.totalOutflowMinor > 0) && (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold tabular-nums flex-shrink-0 ${
+                          analytics.netFlowMinor >= 0
+                            ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-rose-500/12 text-rose-600 dark:text-rose-400'
+                        }`}
+                      >
+                        {analytics.netFlowMinor >= 0 ? '+' : ''}
+                        {Money.format(analytics.netFlowMinor)}
+                        {analytics.savingsRatePct !== null && (
+                          <span className="opacity-75">({analytics.savingsRatePct}%)</span>
+                        )}
+                      </span>
+                    )
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tabular-nums bg-[var(--lg-muted)]/10 text-[var(--lg-muted)] flex-shrink-0">
+                      Cash {Money.format(analytics.totalCashMinor)}
+                    </span>
+                  ))}
+              </div>
+
+              <div
+                className={`text-[32px] leading-tight font-black tabular-nums tracking-tight ${
+                  isOverallAllTime || analytics.netFlowMinor === 0
+                    ? 'text-[var(--lg-foreground)]'
+                    : analytics.netFlowMinor > 0
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-rose-600 dark:text-rose-400'
+                }`}
+              >
+                {loading ? (
+                  <span className="inline-flex items-center text-[var(--lg-foreground)]">
+                    Rs <LoadingDots size="md" />
+                  </span>
+                ) : isOverallAllTime ? (
+                  Money.format(analytics.totalCashMinor)
+                ) : (
+                  <>
+                    {analytics.netFlowMinor > 0 ? '+' : ''}
+                    {Money.format(analytics.netFlowMinor)}
+                  </>
+                )}
+              </div>
+            </div>
 
         {/* Subtle Inflow vs Outflow visual balance bar */}
         {!loading && (analytics.totalInflowMinor > 0 || analytics.totalOutflowMinor > 0) && (() => {
@@ -623,6 +671,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </Glass>
+        );
+      })()}
 
       {/* Cash Flow Trend Chart (Flat-on-Screen) */}
       <section className="pb-5 border-b border-[var(--lg-separator)] space-y-3">
@@ -828,34 +878,57 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="space-y-3">
-            {analytics.projectHealth.map((prj) => (
-              <div key={prj.id} className="space-y-1.5">
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-bold text-[var(--lg-foreground)] truncate">
-                    {prj.name}
-                  </span>
-                  <span className={`font-bold tabular-nums flex-shrink-0 ${ALERT_TEXT_CLASSES[prj.alertLevel]}`}>
-                    {prj.utilizationPct}%
-                  </span>
-                </div>
+            {analytics.projectHealth.map((prj) => {
+              const hasActiveProjectFilter = scopeFilter !== 'all' && scopeFilter !== 'personal';
+              const isSelected = scopeFilter === prj.id;
+              return (
+                <div
+                  key={prj.id}
+                  onClick={() => {
+                    setPinSelectedProject(false);
+                    setScopeFilter(isSelected ? 'all' : prj.id);
+                  }}
+                  className={`space-y-1.5 cursor-pointer transition-all ${
+                    isSelected
+                      ? 'pl-3 border-l-[3px] border-blue-500'
+                      : hasActiveProjectFilter
+                        ? 'opacity-50 hover:opacity-80'
+                        : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span
+                      className={`font-bold truncate ${
+                        isSelected
+                          ? 'text-blue-600 dark:text-blue-400'
+                          : 'text-[var(--lg-foreground)]'
+                      }`}
+                    >
+                      {prj.name}
+                    </span>
+                    <span className={`font-bold tabular-nums flex-shrink-0 ${ALERT_TEXT_CLASSES[prj.alertLevel]}`}>
+                      {prj.utilizationPct}%
+                    </span>
+                  </div>
 
-                <div className="w-full h-1.5 rounded-full bg-[var(--lg-separator)] overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${ALERT_BAR_CLASSES[prj.alertLevel]}`}
-                    style={{ width: `${Math.min(100, prj.utilizationPct)}%` }}
-                  />
-                </div>
+                  <div className="w-full h-1.5 rounded-full bg-[var(--lg-separator)] overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${ALERT_BAR_CLASSES[prj.alertLevel]}`}
+                      style={{ width: `${Math.min(100, prj.utilizationPct)}%` }}
+                    />
+                  </div>
 
-                <div className="flex items-center justify-between text-[11px] text-[var(--lg-muted)] tabular-nums">
-                  <span>Spent {Money.format(prj.spentMinor)}</span>
-                  <span>
-                    {prj.remainingMinor >= 0
-                      ? `${Money.format(prj.remainingMinor)} left`
-                      : `${Money.format(Math.abs(prj.remainingMinor))} over`}
-                  </span>
+                  <div className="flex items-center justify-between text-[11px] text-[var(--lg-muted)] tabular-nums">
+                    <span>Spent {Money.format(prj.spentMinor)}</span>
+                    <span>
+                      {prj.remainingMinor >= 0
+                        ? `${Money.format(prj.remainingMinor)} left`
+                        : `${Money.format(Math.abs(prj.remainingMinor))} over`}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {analytics.totalActiveProjectsCount > 5 && onNavigateTab && (
@@ -879,9 +952,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </h2>
           <button
             type="button"
-            onClick={() => {
-              // Reserved for upcoming History screen
-            }}
+            onClick={() => onOpenHistory?.()}
             className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-0.5"
           >
             History <ChevronRight className="w-3.5 h-3.5" />

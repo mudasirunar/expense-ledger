@@ -212,7 +212,49 @@ describe('computeDashboardAnalytics', () => {
     expect(res.totalOutflowMinor).toBe(1500000); // Only personal groceries
     expect(res.totalPayableMinor).toBe(0);
     expect(res.totalReceivableMinor).toBe(0);
-    expect(res.projectHealth).toHaveLength(0);
+    // Project budget health stays visible showing top active projects
+    expect(res.projectHealth).toHaveLength(1);
+  });
+
+  it('pins a selected project to #1 if it falls outside the top 5', () => {
+    const sevenProjects: Project[] = Array.from({ length: 7 }, (_, idx) => ({
+      id: `prj-${idx + 1}`,
+      name: `Project ${idx + 1}`,
+      startDate: '2026-10-01',
+      status: 'active',
+      budgetMinor: 10000000,
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+    }));
+    const txs: Transaction[] = sevenProjects.slice(0, 6).map((p, idx) => ({
+      id: `tx-p-${idx}`,
+      idempotencyKey: `kp-${idx}`,
+      type: 'expense',
+      scope: 'project',
+      projectId: p.id,
+      accountId: 'acc-1',
+      amountMinor: (6 - idx) * 1000000, // prj-1 highest, prj-7 has 0 spent (rank #7)
+      date: '2026-11-25',
+      status: 'posted',
+      createdAt: '2026-11-25T10:00:00Z',
+      updatedAt: '2026-11-25T10:00:00Z',
+    }));
+
+    const res = computeDashboardAnalytics({
+      accounts: baseAccounts,
+      projects: sevenProjects,
+      transactions: txs,
+      obligations: [],
+      payments: [],
+      timeHorizon: 'all',
+      scopeFilter: 'prj-7',
+      now: NOW,
+    });
+
+    expect(res.projectHealth).toHaveLength(5);
+    expect(res.projectHealth[0].id).toBe('prj-7');
+    expect(res.projectHealth[1].id).toBe('prj-1');
+    expect(res.totalActiveProjectsCount).toBe(7);
   });
 
   it('builds dynamic trend buckets per time horizon (7d for today, 4w for month, 6m for all)', () => {

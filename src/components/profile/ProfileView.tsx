@@ -20,7 +20,7 @@ import {
   UserCollectionName,
   executeSmartRestore,
   exportFullBackupJson,
-  exportLedgerCsv,
+  exportLedgerExcel,
   parseAndValidateBackup,
   planSmartRestore,
 } from '@/data/sync/backupRestoreService';
@@ -108,11 +108,14 @@ export const ProfileView: React.FC = () => {
     if (!user?.uid || isExportingJson) return;
     setIsExportingJson(true);
     try {
-      const { totalRecords } = await exportFullBackupJson(user.uid);
-      showSnackbar({
-        message: totalRecords > 0 ? `Backup downloaded (${totalRecords} records).` : 'Empty backup downloaded.',
-        tone: 'success',
-      });
+      const { totalRecords, outcome } = await exportFullBackupJson(user.uid);
+      // Only show download snackbar on actual direct download (never fake success when OS Share Sheet is used/cancelled)
+      if (outcome === 'downloaded') {
+        showSnackbar({
+          message: totalRecords > 0 ? `Backup downloaded (${totalRecords} records).` : 'Empty backup downloaded.',
+          tone: 'success',
+        });
+      }
     } catch (error) {
       console.error('[Profile] Backup export failed:', error);
       showSnackbar({
@@ -128,15 +131,20 @@ export const ProfileView: React.FC = () => {
     if (!user?.uid || isExportingCsv) return;
     setIsExportingCsv(true);
     try {
-      const { rowCount } = await exportLedgerCsv(user.uid);
-      showSnackbar({
-        message: rowCount > 0 ? `Exported ${rowCount} transactions to CSV.` : 'Exported empty CSV.',
-        tone: 'success',
-      });
+      const { rowCount, outcome } = await exportLedgerExcel(user.uid);
+      if (outcome === 'downloaded') {
+        showSnackbar({
+          message:
+            rowCount > 0
+              ? `Exported ${rowCount} ${rowCount === 1 ? 'entry' : 'entries'} to Excel.`
+              : 'Exported empty workbook.',
+          tone: 'success',
+        });
+      }
     } catch (error) {
-      console.error('[Profile] CSV export failed:', error);
+      console.error('[Profile] Excel export failed:', error);
       showSnackbar({
-        message: 'Could not export CSV. Please try again.',
+        message: 'Could not export Excel file. Please try again.',
         tone: 'error',
       });
     } finally {

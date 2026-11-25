@@ -29,6 +29,7 @@ export interface DashboardAnalyticsInput {
   payments: readonly Payment[];
   timeHorizon: DashboardTimeHorizon;
   scopeFilter: DashboardScopeFilter;
+  pinSelectedProject?: boolean;
   now?: Date;
 }
 
@@ -188,6 +189,7 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
     payments,
     timeHorizon,
     scopeFilter,
+    pinSelectedProject = true,
     now = new Date(),
   } = input;
 
@@ -381,7 +383,6 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
 
   const allProjectHealth: ProjectHealthItem[] = projects
     .filter((p) => p.status !== 'archived')
-    .filter((p) => scopeFilter === 'all' || scopeFilter === p.id)
     .map((p) => {
       const budgetMinor = p.budgetMinor || 0;
       const spentMinor = spentByProject.get(p.id) || 0;
@@ -400,9 +401,89 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
     })
     .sort((a, b) => b.utilizationPct - a.utilizationPct || b.spentMinor - a.spentMinor);
 
-  const projectHealth = allProjectHealth.slice(0, 5);
+  // Always show top 5 active projects; pin selected project to #1 when requested
+  // (e.g. chosen from top scope chips) or if it falls outside the top 5.
+  const isSpecificProjectSelected = scopeFilter !== 'all' && scopeFilter !== 'personal';
+  let projectHealth = allProjectHealth.slice(0, 5);
+  if (
+    isSpecificProjectSelected &&
+    (pinSelectedProject || !projectHealth.some((p) => p.id === scopeFilter))
+  ) {
+    const selectedItem = allProjectHealth.find((p) => p.id === scopeFilter);
+    if (selectedItem) {
+      projectHealth = [selectedItem, ...allProjectHealth.filter((p) => p.id !== scopeFilter).slice(0, 4)];
+    }
+  }
 
-  // 6. Unified Recent Activity Feed (latest 10 items)
+  // 6. Unified Recent Activity Feed (latest 5 items for selected scope, independent of time horizon)
+  const feed = buildActivityFeed({
+    accounts,
+    projects,
+    transactions,
+    obligations,
+    payments,
+    timeHorizon: 'all',
+    scopeFilter,
+    now,
+  });
+
+  return {
+    totalCashMinor,
+    totalInflowMinor,
+    totalOutflowMinor,
+    netFlowMinor,
+    savingsRatePct,
+    totalPayableMinor,
+    openPayableCount,
+    totalReceivableMinor,
+    openReceivableCount,
+    unallocatedAdvancesMinor,
+    liquidityBreakdown,
+    topAccounts,
+    totalActiveAccountsCount: activeAccounts.length,
+    trendBuckets,
+    trendMaxMinor,
+    trendSubtitle,
+    categoryBreakdown,
+    projectHealth,
+    totalActiveProjectsCount: allProjectHealth.length,
+    recentActivity: feed.slice(0, 5),
+    totalActivityCount: feed.length,
+  };
+}
+
+export interface ActivityFeedInput {
+  accounts: readonly Account[];
+  projects: readonly Project[];
+  transactions: readonly Transaction[];
+  obligations: readonly Obligation[];
+  payments: readonly Payment[];
+  timeHorizon?: DashboardTimeHorizon;
+  scopeFilter?: DashboardScopeFilter;
+  now?: Date;
+}
+
+export function buildActivityFeed(input: ActivityFeedInput): ActivityFeedItem[] {
+  const {
+    accounts,
+    projects,
+    transactions,
+    obligations,
+    payments,
+    timeHorizon = 'all',
+    scopeFilter = 'all',
+    now = new Date(),
+  } = input;
+
+  const projectNameMap = new Map<string, string>();
+  for (const p of projects) {
+    projectNameMap.set(p.id, p.name);
+  }
+  const accountNameMap = new Map<string, string>();
+  for (const a of accounts) {
+    accountNameMap.set(a.id, a.name);
+  }
+
   const feed: ActivityFeedItem[] = [];
 
   for (const tx of transactions) {
@@ -483,30 +564,7 @@ export function computeDashboardAnalytics(input: DashboardAnalyticsInput): Dashb
   }
 
   feed.sort((a, b) => (a.sortKey < b.sortKey ? 1 : a.sortKey > b.sortKey ? -1 : 0));
-
-  return {
-    totalCashMinor,
-    totalInflowMinor,
-    totalOutflowMinor,
-    netFlowMinor,
-    savingsRatePct,
-    totalPayableMinor,
-    openPayableCount,
-    totalReceivableMinor,
-    openReceivableCount,
-    unallocatedAdvancesMinor,
-    liquidityBreakdown,
-    topAccounts,
-    totalActiveAccountsCount: activeAccounts.length,
-    trendBuckets,
-    trendMaxMinor,
-    trendSubtitle,
-    categoryBreakdown,
-    projectHealth,
-    totalActiveProjectsCount: allProjectHealth.length,
-    recentActivity: feed.slice(0, 5),
-    totalActivityCount: feed.length,
-  };
+  return feed;
 }
 
 function buildTrendBuckets(

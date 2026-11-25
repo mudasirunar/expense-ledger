@@ -110,9 +110,9 @@ body.modal-open .scroll-container {
   overscroll-behavior: contain !important;
 }
 
-/* Modals re-center inside the visible area above the iOS keyboard; background stays static.
-   Small fixed gap (0.75rem) between dialog and keyboard. */
-body.modal-open .fixed.inset-0.z-50 {
+/* Centered modals re-center inside the visible area above the iOS keyboard; background stays static.
+   Bottom sheets ([data-bottom-sheet="true"]) stay flush edge-to-edge at the bottom. */
+body.modal-open .fixed.inset-0.z-50:not([data-bottom-sheet="true"]) {
   padding-bottom: calc(0.75rem + var(--kb, 0px)) !important;
   transition: padding-bottom 150ms ease-out;
 }

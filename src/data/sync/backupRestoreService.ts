@@ -10,6 +10,7 @@ import {
   Transaction,
 } from '@/domain/entities';
 import { Money } from '@/domain/accounting/money';
+import { computeDashboardAnalytics } from '@/domain/accounting/dashboardAnalytics';
 import {
   DELETED_RECORDS_COLLECTION,
   USER_DATA_COLLECTIONS,
@@ -73,7 +74,13 @@ export interface SmartRestorePlan {
   operations: RestoreWriteOp[];
 }
 
-async function triggerFileDownload(content: string, filename: string, mimeType: string): Promise<void> {
+export type FileTransferOutcome = 'shared' | 'downloaded' | 'cancelled';
+
+async function triggerFileDownload(
+  content: BlobPart,
+  filename: string,
+  mimeType: string
+): Promise<FileTransferOutcome> {
   const blob = new Blob([content], { type: mimeType });
 
   // On mobile / iOS Home-Screen PWA, prefer native Share Sheet (Save to Files, AirDrop, etc.)
@@ -90,16 +97,14 @@ async function triggerFileDownload(content: string, filename: string, mimeType: 
     try {
       const file = new File([blob], filename, { type: mimeType });
       if (navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: filename,
-        });
-        return;
+        // Pass only `files` so macOS/iOS Copy doesn't duplicate pasteboard items
+        await navigator.share({ files: [file] });
+        return 'shared';
       }
     } catch (err) {
-      // If user explicitly cancelled the Share Sheet, don't force a fallback download
+      // User dismissed/cancelled the OS Share Sheet — never fall back to download or fake success
       if (err instanceof Error && err.name === 'AbortError') {
-        return;
+        return 'cancelled';
       }
     }
   }
@@ -112,6 +117,7 @@ async function triggerFileDownload(content: string, filename: string, mimeType: 
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return 'downloaded';
 }
 
 function escapeCsvCell(value: string | number | undefined | null): string {
@@ -184,7 +190,7 @@ async function fetchAllActiveData(userId: string): Promise<BackupDataPayload> {
  */
 export async function exportFullBackupJson(
   userId: string
-): Promise<{ totalRecords: number; filename: string }> {
+): Promise<{ totalRecords: number; filename: string; outcome: FileTransferOutcome }> {
   const data = await fetchAllActiveData(userId);
   const counts: Record<UserCollectionName, number> = {
     projects: data.projects.length,
@@ -207,9 +213,13 @@ export async function exportFullBackupJson(
 
   const dateStamp = envelope.exportedAt.slice(0, 10);
   const filename = `expense-ledger-backup-${dateStamp}.json`;
-  await triggerFileDownload(JSON.stringify(envelope, null, 2), filename, 'application/json');
+  const outcome = await triggerFileDownload(
+    JSON.stringify(envelope, null, 2),
+    filename,
+    'application/json'
+  );
 
-  return { totalRecords, filename };
+  return { totalRecords, filename, outcome };
 }
 
 function formatLocalTime(isoTimestamp?: string): string {
@@ -222,12 +232,24 @@ function formatLocalTime(isoTimestamp?: string): string {
   return `${hh}:${mm}:${ss}`;
 }
 
+function formatLocalTime12h(isoTimestamp?: string): string {
+  if (!isoTimestamp) return '';
+  const d = new Date(isoTimestamp);
+  if (Number.isNaN(d.getTime())) return '';
+  const hours24 = d.getHours();
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const hours12 = hours24 % 12 || 12;
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hours12}:${mm} ${period}`;
+}
+
 /**
  * Builds an RFC-4180 CSV string from active ledger transactions with resolved names,
  * date + time columns, sorted latest-first by date and timestamp.
  */
 export function buildTransactionsCsv(
-  data: Pick<BackupDataPayload, 'transactions' | 'accounts' | 'projects' | 'contacts'>
+  data: Pick<BackupDataPayload, 'transactions' | 'accounts' | 'projects' | 'contacts'> &
+    Partial<Pick<BackupDataPayload, 'obligations' | 'payments'>>
 ): string {
   const accountMap = new Map(data.accounts.map((a) => [a.id, a.name]));
   const projectMap = new Map(data.projects.map((p) => [p.id, p.name]));
@@ -236,6 +258,7 @@ export function buildTransactionsCsv(
   const headers = [
     'Date',
     'Time',
+    'Record',
     'Type',
     'Scope',
     'Amount (PKR)',
@@ -247,30 +270,100 @@ export function buildTransactionsCsv(
     'Notes',
   ];
 
-  const sorted = [...data.transactions].sort((a, b) => {
-    const dateCmp = (b.date || '').localeCompare(a.date || '');
+  interface CsvEntry {
+    date: string;
+    createdAt: string;
+    cells: string[];
+  }
+
+  const entries: CsvEntry[] = [];
+
+  for (const tx of data.transactions) {
+    if (tx.status === 'voided') continue;
+    entries.push({
+      date: tx.date || '',
+      createdAt: tx.createdAt || '',
+      cells: [
+        tx.date || '',
+        formatLocalTime(tx.createdAt),
+        'Transaction',
+        tx.type || '',
+        tx.scope || '',
+        Money.toMajorString(tx.amountMinor || 0),
+        tx.status || '',
+        accountMap.get(tx.accountId) || tx.accountId || '',
+        tx.targetAccountId ? accountMap.get(tx.targetAccountId) || tx.targetAccountId : '',
+        tx.projectId ? projectMap.get(tx.projectId) || tx.projectId : '',
+        tx.contactId ? contactMap.get(tx.contactId) || tx.contactId : '',
+        tx.notes || '',
+      ],
+    });
+  }
+
+  for (const ob of data.obligations ?? []) {
+    if (ob.status === 'voided') continue;
+    const noteParts: string[] = [];
+    if (ob.title) noteParts.push(ob.title);
+    if (ob.materialDetails) {
+      const { quantity, unit, unitPriceMinor } = ob.materialDetails;
+      noteParts.push(`${quantity} ${unit} @ ${Money.toMajorString(unitPriceMinor)}`);
+    }
+    if (ob.notes) noteParts.push(ob.notes);
+
+    entries.push({
+      date: ob.date || '',
+      createdAt: ob.createdAt || '',
+      cells: [
+        ob.date || '',
+        formatLocalTime(ob.createdAt),
+        'Bill',
+        ob.type || '',
+        ob.projectId ? 'project' : 'personal',
+        Money.toMajorString(ob.totalAmountMinor || 0),
+        ob.status || '',
+        '',
+        '',
+        ob.projectId ? projectMap.get(ob.projectId) || ob.projectId : '',
+        ob.contactId ? contactMap.get(ob.contactId) || ob.contactId : '',
+        noteParts.join(' — '),
+      ],
+    });
+  }
+
+  for (const pay of data.payments ?? []) {
+    if (pay.status === 'voided') continue;
+    const noteParts: string[] = [];
+    if (pay.method) noteParts.push(pay.method);
+    if (pay.referenceNumber) noteParts.push(`Ref ${pay.referenceNumber}`);
+    if (pay.notes) noteParts.push(pay.notes);
+
+    entries.push({
+      date: pay.date || '',
+      createdAt: pay.createdAt || '',
+      cells: [
+        pay.date || '',
+        pay.time || formatLocalTime(pay.createdAt),
+        'Payment',
+        pay.direction || '',
+        pay.projectId ? 'project' : 'personal',
+        Money.toMajorString(pay.amountMinor || 0),
+        pay.status || '',
+        accountMap.get(pay.accountId) || pay.accountId || '',
+        '',
+        pay.projectId ? projectMap.get(pay.projectId) || pay.projectId : '',
+        pay.contactId ? contactMap.get(pay.contactId) || pay.contactId : '',
+        noteParts.join(' — '),
+      ],
+    });
+  }
+
+  entries.sort((a, b) => {
+    const dateCmp = b.date.localeCompare(a.date);
     if (dateCmp !== 0) return dateCmp;
-    return (b.createdAt || '').localeCompare(a.createdAt || '');
+    return b.createdAt.localeCompare(a.createdAt);
   });
 
-  const rows = sorted.map((tx) => {
-    const majorAmount = Money.toMajorString(tx.amountMinor || 0);
-    return [
-      tx.date || '',
-      formatLocalTime(tx.createdAt),
-      tx.type || '',
-      tx.scope || '',
-      majorAmount,
-      tx.status || '',
-      accountMap.get(tx.accountId) || tx.accountId || '',
-      tx.targetAccountId ? accountMap.get(tx.targetAccountId) || tx.targetAccountId : '',
-      tx.projectId ? projectMap.get(tx.projectId) || tx.projectId : '',
-      tx.contactId ? contactMap.get(tx.contactId) || tx.contactId : '',
-      tx.notes || '',
-    ]
-      .map(escapeCsvCell)
-      .join(',');
-  });
+  const rows = entries.map((entry) => entry.cells.map(escapeCsvCell).join(','));
 
   return [headers.map(escapeCsvCell).join(','), ...rows].join('\r\n');
 }
@@ -280,14 +373,384 @@ export function buildTransactionsCsv(
  */
 export async function exportLedgerCsv(
   userId: string
-): Promise<{ rowCount: number; filename: string }> {
+): Promise<{ rowCount: number; filename: string; outcome: FileTransferOutcome }> {
   const data = await fetchAllActiveData(userId);
   const csv = buildTransactionsCsv(data);
   const dateStamp = new Date().toISOString().slice(0, 10);
   const filename = `expense-ledger-transactions-${dateStamp}.csv`;
-  await triggerFileDownload(csv, filename, 'text/csv;charset=utf-8;');
+  const outcome = await triggerFileDownload(csv, filename, 'text/csv;charset=utf-8;');
 
-  return { rowCount: data.transactions.length, filename };
+  const rowCount =
+    data.transactions.filter((t) => t.status !== 'voided').length +
+    data.obligations.filter((o) => o.status !== 'voided').length +
+    data.payments.filter((p) => p.status !== 'voided').length;
+  return { rowCount, filename, outcome };
+}
+
+export interface ExcelSheetData {
+  name: string;
+  rows: (string | number)[][];
+  headerRowIndices: number[];
+  titleRowIndex?: number;
+}
+
+function toExcelAmount(minorUnits: number | undefined): number {
+  return Number(Money.toMajorString(minorUnits || 0));
+}
+
+function formatPrettyLabel(raw: string | undefined): string {
+  if (!raw) return '';
+  return raw
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+/**
+ * Builds clean, dedicated multi-sheet data (Summary, Expenses & Income, Transfers, Bills, Payments)
+ * with zero blank cross-type columns and numeric PKR cells ready for Excel / Google Sheets / Numbers.
+ */
+export function buildLedgerWorkbookSheets(data: BackupDataPayload): {
+  sheets: ExcelSheetData[];
+  totalEntries: number;
+} {
+  const accountMap = new Map(data.accounts.map((a) => [a.id, a.name]));
+  const projectMap = new Map(data.projects.map((p) => [p.id, p.name]));
+  const contactMap = new Map(data.contacts.map((c) => [c.id, c.name]));
+
+  const analytics = computeDashboardAnalytics({
+    accounts: data.accounts,
+    projects: data.projects,
+    transactions: data.transactions,
+    obligations: data.obligations,
+    payments: data.payments,
+    timeHorizon: 'all',
+    scopeFilter: 'all',
+  });
+
+  // 1. Summary Sheet
+  const summaryHeaderRows: number[] = [3];
+  const summaryRows: (string | number)[][] = [
+    ['Expense Ledger Summary', ''],
+    ['Exported At', new Date().toISOString().slice(0, 10)],
+    [],
+    ['Metric', 'Amount (PKR)'],
+    ['Net Cash Position', toExcelAmount(analytics.totalCashMinor)],
+    ['Total Inflow', toExcelAmount(analytics.totalInflowMinor)],
+    ['Total Outflow', toExcelAmount(analytics.totalOutflowMinor)],
+    ['Net Flow', toExcelAmount(analytics.netFlowMinor)],
+    ['Payables (You Owe)', toExcelAmount(analytics.totalPayableMinor)],
+    ['Receivables (Owed to You)', toExcelAmount(analytics.totalReceivableMinor)],
+    ['Unallocated Advances', toExcelAmount(analytics.unallocatedAdvancesMinor)],
+  ];
+
+  const activeAccounts = data.accounts.filter((a) => !a.isArchived);
+  if (activeAccounts.length > 0) {
+    summaryRows.push([]);
+    summaryHeaderRows.push(summaryRows.length);
+    summaryRows.push(['Accounts', 'Type', 'Balance (PKR)']);
+    for (const acc of activeAccounts) {
+      summaryRows.push([acc.name, formatPrettyLabel(acc.type), toExcelAmount(acc.currentBalanceMinor)]);
+    }
+  }
+
+  // Compute spent per project across ALL active projects (never capped to top 5 in Excel export)
+  const spentByProject = new Map<string, number>();
+  for (const tx of data.transactions) {
+    if (tx.status === 'voided' || tx.type !== 'expense' || !tx.projectId) continue;
+    spentByProject.set(tx.projectId, (spentByProject.get(tx.projectId) || 0) + (tx.amountMinor || 0));
+  }
+  for (const ob of data.obligations) {
+    if (ob.status === 'voided' || ob.direction !== 'payable' || !ob.projectId) continue;
+    spentByProject.set(ob.projectId, (spentByProject.get(ob.projectId) || 0) + (ob.totalAmountMinor || 0));
+  }
+
+  const activeProjects = data.projects.filter((p) => p.status !== 'archived');
+  if (activeProjects.length > 0) {
+    summaryRows.push([]);
+    summaryHeaderRows.push(summaryRows.length);
+    summaryRows.push(['Projects', 'Budget (PKR)', 'Spent (PKR)', 'Remaining (PKR)', 'Used %']);
+    for (const prj of activeProjects) {
+      const budgetMinor = prj.budgetMinor || 0;
+      const spentMinor = spentByProject.get(prj.id) || 0;
+      const remainingMinor = budgetMinor - spentMinor;
+      const usedPct = budgetMinor > 0 ? Math.round((spentMinor * 100) / budgetMinor) : 0;
+      summaryRows.push([
+        prj.name,
+        toExcelAmount(budgetMinor),
+        toExcelAmount(spentMinor),
+        toExcelAmount(remainingMinor),
+        `${usedPct}%`,
+      ]);
+    }
+  }
+
+  const sortLatestFirst = <T extends { date?: string; createdAt?: string }>(items: T[]): T[] =>
+    [...items].sort((a, b) => {
+      const dateCmp = (b.date || '').localeCompare(a.date || '');
+      if (dateCmp !== 0) return dateCmp;
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+
+  // 2. Expenses & Income Sheet
+  const activeStandardTxs = sortLatestFirst(
+    data.transactions.filter((t) => t.status !== 'voided' && t.type !== 'transfer')
+  );
+  const expenseIncomeRows: (string | number)[][] = [
+    ['Date', 'Time', 'Type', 'Scope', 'Project', 'Account', 'Contact', 'Amount (PKR)', 'Notes'],
+    ...activeStandardTxs.map((tx) => [
+      tx.date || '',
+      formatLocalTime12h(tx.createdAt),
+      formatPrettyLabel(tx.type),
+      tx.projectId ? 'Project' : 'Personal',
+      tx.projectId ? projectMap.get(tx.projectId) || '' : '',
+      accountMap.get(tx.accountId) || '',
+      tx.contactId ? contactMap.get(tx.contactId) || '' : '',
+      toExcelAmount(tx.amountMinor),
+      tx.notes || '',
+    ]),
+  ];
+
+  // 3. Transfers Sheet
+  const activeTransfers = sortLatestFirst(
+    data.transactions.filter((t) => t.status !== 'voided' && t.type === 'transfer')
+  );
+  const transferRows: (string | number)[][] = [
+    ['Date', 'Time', 'From Account', 'To Account', 'Amount (PKR)', 'Notes'],
+    ...activeTransfers.map((tx) => [
+      tx.date || '',
+      formatLocalTime12h(tx.createdAt),
+      accountMap.get(tx.accountId) || '',
+      tx.targetAccountId ? accountMap.get(tx.targetAccountId) || '' : '',
+      toExcelAmount(tx.amountMinor),
+      tx.notes || '',
+    ]),
+  ];
+
+  // 4. Bills (Obligations) Sheet
+  const activeBills = sortLatestFirst(
+    data.obligations.filter((o) => o.status !== 'voided')
+  );
+  const billRows: (string | number)[][] = [
+    [
+      'Date',
+      'Time',
+      'Title',
+      'Type',
+      'Direction',
+      'Project',
+      'Contact',
+      'Qty',
+      'Unit',
+      'Unit Price (PKR)',
+      'Total (PKR)',
+      'Paid (PKR)',
+      'Remaining (PKR)',
+      'Status',
+      'Notes',
+    ],
+    ...activeBills.map((ob) => [
+      ob.date || '',
+      formatLocalTime12h(ob.createdAt),
+      ob.title || '',
+      formatPrettyLabel(ob.type),
+      ob.direction === 'receivable' ? 'Receivable' : 'Payable',
+      ob.projectId ? projectMap.get(ob.projectId) || '' : 'Personal',
+      ob.contactId ? contactMap.get(ob.contactId) || '' : '',
+      ob.materialDetails?.quantity ?? '',
+      ob.materialDetails?.unit ?? '',
+      ob.materialDetails ? toExcelAmount(ob.materialDetails.unitPriceMinor) : '',
+      toExcelAmount(ob.totalAmountMinor),
+      toExcelAmount(ob.allocatedAmountMinor),
+      toExcelAmount(ob.remainingAmountMinor),
+      formatPrettyLabel(ob.status),
+      ob.notes || '',
+    ]),
+  ];
+
+  // 5. Payments Sheet
+  const activePayments = sortLatestFirst(
+    data.payments.filter((p) => p.status !== 'voided')
+  );
+  const paymentRows: (string | number)[][] = [
+    [
+      'Date',
+      'Time',
+      'Direction',
+      'Account',
+      'Method',
+      'Project',
+      'Contact',
+      'Amount (PKR)',
+      'Allocated (PKR)',
+      'Advance (PKR)',
+      'Reference #',
+      'Notes',
+    ],
+    ...activePayments.map((pay) => [
+      pay.date || '',
+      pay.time || formatLocalTime12h(pay.createdAt),
+      pay.direction === 'incoming' ? 'Incoming' : 'Outgoing',
+      accountMap.get(pay.accountId) || '',
+      formatPrettyLabel(pay.method),
+      pay.projectId ? projectMap.get(pay.projectId) || '' : 'Personal',
+      pay.contactId ? contactMap.get(pay.contactId) || '' : '',
+      toExcelAmount(pay.amountMinor),
+      toExcelAmount(pay.allocatedAmountMinor),
+      toExcelAmount(pay.unallocatedAmountMinor),
+      pay.referenceNumber || '',
+      pay.notes || '',
+    ]),
+  ];
+
+  const totalEntries =
+    activeStandardTxs.length +
+    activeTransfers.length +
+    activeBills.length +
+    activePayments.length;
+
+  return {
+    sheets: [
+      { name: 'Summary', rows: summaryRows, headerRowIndices: summaryHeaderRows, titleRowIndex: 0 },
+      { name: 'Expenses & Income', rows: expenseIncomeRows, headerRowIndices: [0] },
+      { name: 'Transfers', rows: transferRows, headerRowIndices: [0] },
+      { name: 'Bills', rows: billRows, headerRowIndices: [0] },
+      { name: 'Payments', rows: paymentRows, headerRowIndices: [0] },
+    ],
+    totalEntries,
+  };
+}
+
+/**
+ * Exports all active ledger data as a clean, styled multi-sheet Excel workbook (.xlsx)
+ * using our warm light-mode ledger cream palette for clear table & heading separation.
+ */
+export async function exportLedgerExcel(
+  userId: string
+): Promise<{ rowCount: number; filename: string; outcome: FileTransferOutcome }> {
+  const [data, xlsxMod] = await Promise.all([
+    fetchAllActiveData(userId),
+    import('xlsx-js-style'),
+  ]);
+  const XLSX = xlsxMod.default ?? xlsxMod;
+  const { sheets, totalEntries } = buildLedgerWorkbookSheets(data);
+
+  // Clean warm ledger-cream styles matching app light mode (#E2DDD5 / #D8D1C5)
+  const titleStyle = {
+    font: { name: 'Calibri', sz: 13, bold: true, color: { rgb: '0F172A' } },
+    fill: { fgColor: { rgb: 'E2DDD5' } },
+    alignment: { vertical: 'center', horizontal: 'left' },
+  };
+
+  const headerStyle = {
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '0F172A' } },
+    fill: { fgColor: { rgb: 'D6CFC2' } },
+    border: {
+      top: { style: 'thin', color: { rgb: 'B8AFA0' } },
+      bottom: { style: 'medium', color: { rgb: 'A89F8F' } },
+    },
+    alignment: { vertical: 'center', horizontal: 'left' },
+  };
+
+  const dataTextStyle = {
+    font: { name: 'Calibri', sz: 10.5, color: { rgb: '1E293B' } },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'ECE8E1' } },
+    },
+    alignment: { vertical: 'center', horizontal: 'left' },
+  };
+
+  const dataNumberStyle = {
+    font: { name: 'Calibri', sz: 10.5, color: { rgb: '0F172A' } },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'ECE8E1' } },
+    },
+    alignment: { vertical: 'center', horizontal: 'right' },
+    numFmt: '#,##0.00',
+  };
+
+  const dataQtyStyle = {
+    font: { name: 'Calibri', sz: 10.5, color: { rgb: '0F172A' } },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'ECE8E1' } },
+    },
+    alignment: { vertical: 'center', horizontal: 'right' },
+    numFmt: '#,##0.##',
+  };
+
+  const wb = XLSX.utils.book_new();
+  for (const sheet of sheets) {
+    const ws = XLSX.utils.aoa_to_sheet(sheet.rows);
+    const headerSet = new Set(sheet.headerRowIndices);
+    const colCount = sheet.rows.reduce((max, r) => Math.max(max, r.length), 0);
+
+    // Apply row heights & cell styles cleanly
+    const rowHeights: Array<{ hpt?: number }> = [];
+    for (let r = 0; r < sheet.rows.length; r++) {
+      const row = sheet.rows[r];
+      const isTitle = sheet.titleRowIndex === r;
+      const isHeader = headerSet.has(r);
+      const isEmpty = row.length === 0;
+
+      if (isTitle) rowHeights.push({ hpt: 28 });
+      else if (isHeader) rowHeights.push({ hpt: 24 });
+      else if (isEmpty) rowHeights.push({ hpt: 12 });
+      else rowHeights.push({ hpt: 20 });
+
+      if (isEmpty) continue;
+
+      const spanCols = isHeader || isTitle ? Math.max(row.length, isTitle ? 2 : row.length) : row.length;
+      for (let c = 0; c < spanCols; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        if (!ws[addr]) {
+          ws[addr] = { t: 's', v: '' };
+        }
+        const cell = ws[addr];
+        if (isTitle) {
+          cell.s = titleStyle;
+        } else if (isHeader) {
+          const isNumericHeader = typeof cell.v === 'string' && (cell.v.includes('(PKR)') || cell.v === 'Qty' || cell.v === 'Used %');
+          cell.s = isNumericHeader
+            ? { ...headerStyle, alignment: { vertical: 'center', horizontal: 'right' } }
+            : headerStyle;
+        } else if (typeof cell.v === 'number') {
+          // Check if this column's header is 'Qty'
+          const colHeader = sheet.rows[sheet.headerRowIndices[0]]?.[c];
+          cell.s = colHeader === 'Qty' ? dataQtyStyle : dataNumberStyle;
+        } else {
+          cell.s = dataTextStyle;
+        }
+      }
+    }
+
+    ws['!rows'] = rowHeights;
+
+    // Auto-size columns with generous padding
+    ws['!cols'] = Array.from({ length: colCount }, (_, colIdx) => {
+      let maxLen = 12;
+      for (const row of sheet.rows) {
+        const val = row[colIdx];
+        if (val !== undefined && val !== null) {
+          maxLen = Math.max(maxLen, String(val).length + 4);
+        }
+      }
+      return { wch: Math.min(42, maxLen) };
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws, sheet.name);
+  }
+
+  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  const bytes = new Uint8Array(buffer);
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  const filename = `expense-ledger-${dateStamp}.xlsx`;
+
+  const outcome = await triggerFileDownload(
+    bytes,
+    filename,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+
+  return { rowCount: totalEntries, filename, outcome };
 }
 
 /**

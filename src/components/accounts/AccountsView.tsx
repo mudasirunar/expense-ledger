@@ -237,42 +237,39 @@ export const AccountsView: React.FC = () => {
   return (
     <div className="space-y-4 pb-20">
       {/* Liquidity Total Card */}
-      <Glass className="p-5 rounded-2xl space-y-3">
-        <div className="flex items-start justify-between">
-          <div>
-            <span className="text-[10px] font-bold tracking-wider text-[var(--lg-muted)] uppercase block">
-              Total Liquid Funds
-            </span>
-            <span className="text-2xl sm:text-3xl font-black text-[var(--lg-foreground)] tabular-nums mt-1 block">
-              {Money.format(totalLiquidityMinor)}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="glass"
-              icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
-              onClick={() => setIsTransferOpen(true)}
-              disabled={accounts.length < 2}
-              className="!text-xs font-semibold !py-1.5 !px-3"
-            >
-              Transfer
-            </Button>
-            <Button
-              variant="filled"
-              tint="#2563EB"
-              icon={<Plus className="w-3.5 h-3.5 stroke-[2.5]" />}
-              onClick={() => setIsCreateOpen(true)}
-              className="!text-xs font-semibold !py-1.5 !px-3"
-            >
-              Add
-            </Button>
-          </div>
+      <Glass className="p-5 rounded-3xl space-y-4">
+        <div>
+          <span className="text-[11px] font-bold tracking-wider text-[var(--lg-muted)] uppercase block">
+            Total Liquid Funds
+          </span>
+          <span className="text-3xl font-black text-[var(--lg-foreground)] tabular-nums tracking-tight mt-1 block truncate">
+            {Money.format(totalLiquidityMinor)}
+          </span>
+          <p className="text-[11px] text-[var(--lg-muted)] mt-1.5">
+            Consolidated liquidity across {accounts.length} active wallets, cash drawers, and bank accounts.
+          </p>
         </div>
 
-        <p className="text-[11px] text-[var(--lg-muted)]">
-          Consolidated liquidity across {accounts.length} active wallets, cash drawers, and bank accounts.
-        </p>
+        <div className="grid grid-cols-2 gap-2.5">
+          <Button
+            variant="glass"
+            icon={<ArrowRightLeft className="w-4 h-4" />}
+            onClick={() => setIsTransferOpen(true)}
+            disabled={accounts.length < 2}
+            className="!w-full !py-2.5 !rounded-[24px] !text-xs font-semibold flex items-center justify-center"
+          >
+            Transfer
+          </Button>
+          <Button
+            variant="filled"
+            tint="#2563EB"
+            icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
+            onClick={() => setIsCreateOpen(true)}
+            className="!w-full !py-2.5 !rounded-[24px] !text-xs font-semibold flex items-center justify-center"
+          >
+            Add Account
+          </Button>
+        </div>
       </Glass>
 
       {/* Account Cards Grid */}

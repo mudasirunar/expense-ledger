@@ -15,7 +15,7 @@ You are responsible for maintaining a reliable, production-grade **Personal Fina
 6. **Strict Git Discipline:** Git operations are prohibited unless explicitly and specifically authorized by the project owner.
 7. **Apple Liquid Glass (Glisse) Controls & Flat-on-Screen UI:** Use Glisse (`glisse` package) for interactive controls, floating bottom docks, buttons, segmented controls, text fields, and bottom sheets. Keep page layouts predominantly **flat-on-screen** directly on the canvas separated by clean **horizontal dividers**—avoid card-heavy designs and use cards sparingly only where genuinely needed.
 8. **Zero-Flicker Theme Adaptability (FOIT Prevention):** The app must seamlessly support Light, Dark, and System modes with persistent `localStorage` and a synchronous blocking head script to guarantee zero flash/flicker of incorrect theme on initial load or reload.
-9. **App Version Awareness & Approval:** Keep track of app version changes (`package.json` `version`, auto-detected via `__APP_VERSION__`). Whenever meaningful features, fixes, or milestones make it the right time to bump the version, remind and **always ask the project owner first**—only update the version after explicit approval.
+9. **App Version Awareness & Approval:** Keep track of app version changes (`package.json` `version`, auto-detected via `__APP_VERSION__`). Whenever meaningful features, fixes, or milestones make it the right time to bump the version, remind and **always ask the project owner first**—only update the version after explicit approval. When bumping the version, always keep **all** version locations in sync (`package.json` `"version"` and `package-lock.json` root `"version"` + `packages[""].version`).
 
 ---
 
