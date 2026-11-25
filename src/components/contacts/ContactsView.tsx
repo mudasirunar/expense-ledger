@@ -282,7 +282,7 @@ export const ContactsView: React.FC = () => {
                   Full Name / Contact Name *
                 </label>
                 <Input
-                  placeholder="e.g. Master Aslam"
+                  placeholder="Full name"
                   value={name}
                   onValueChange={setName}
                   className="!max-w-none"
@@ -295,7 +295,7 @@ export const ContactsView: React.FC = () => {
                   Business / Company Name
                 </label>
                 <Input
-                  placeholder="e.g. Aslam Tile Works"
+                  placeholder="Company"
                   value={companyName}
                   onValueChange={setCompanyName}
                   className="!max-w-none"
@@ -309,7 +309,7 @@ export const ContactsView: React.FC = () => {
                   </label>
                   <Input
                     type="tel"
-                    placeholder="0300-1234567"
+                    placeholder="Phone"
                     value={phone}
                     onValueChange={setPhone}
                     className="!max-w-none"
@@ -321,7 +321,7 @@ export const ContactsView: React.FC = () => {
                   </label>
                   <Input
                     type="email"
-                    placeholder="contact@gmail.com"
+                    placeholder="Email"
                     value={email}
                     onValueChange={setEmail}
                     className="!max-w-none"
@@ -355,7 +355,7 @@ export const ContactsView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--lg-separator)]">
+              <div className="flex items-center justify-end gap-2.5 pt-2">
                 <Button
                   variant="glass"
                   type="button"

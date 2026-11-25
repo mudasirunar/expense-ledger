@@ -9,6 +9,7 @@ import {
   where,
   orderBy,
   limit,
+  onSnapshot,
   QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '@/data/firebase/firestoreClient';
@@ -53,6 +54,27 @@ export class FirestorePaymentRepository implements IPaymentRepository {
     return snap.docs
       .map((d) => d.data() as Payment)
       .filter((item) => isRecordActive(userId, item));
+  }
+
+  subscribe(
+    userId: string,
+    onUpdate: (payments: Payment[]) => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    const q = query(this.getUserPaymentsCollection(userId), orderBy('date', 'desc'));
+    return onSnapshot(
+      q,
+      (snap) => {
+        onUpdate(
+          snap.docs
+            .map((d) => d.data() as Payment)
+            .filter((item) => isRecordActive(userId, item))
+        );
+      },
+      (err) => {
+        if (onError) onError(err);
+      }
+    );
   }
 
   async getLatestByContact(userId: string, contactId: string): Promise<Payment | null> {

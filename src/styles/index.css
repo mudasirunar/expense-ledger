@@ -203,11 +203,21 @@ body.modal-open .fixed.inset-0.z-50 {
   color: #ffffff;
 }
 
-/* Ensure proper calendar icon rendering on date inputs */
+/* Consistent date inputs across iOS PWA (which omits native icons) and Desktop */
 input[type="date"] {
   color-scheme: light;
+  position: relative;
 }
 
 .dark input[type="date"] {
   color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
 }

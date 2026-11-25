@@ -297,7 +297,7 @@ export const ProjectsView: React.FC = () => {
                   Project Title *
                 </label>
                 <Input
-                  placeholder="e.g. Plot 42 Gulberg Villa"
+                  placeholder="Project name"
                   value={name}
                   onValueChange={setName}
                   className="!max-w-none"
@@ -311,7 +311,7 @@ export const ProjectsView: React.FC = () => {
                     Project Code
                   </label>
                   <Input
-                    placeholder="e.g. GUL-42"
+                    placeholder="PRJ-01"
                     value={code}
                     onValueChange={setCode}
                     className="!max-w-none"
@@ -340,6 +340,7 @@ export const ProjectsView: React.FC = () => {
                     type="date"
                     value={startDate}
                     onValueChange={setStartDate}
+                    icon={<Calendar className="w-4 h-4" />}
                     className="!max-w-none"
                   />
                 </div>
@@ -348,7 +349,7 @@ export const ProjectsView: React.FC = () => {
                     Location / City
                   </label>
                   <Input
-                    placeholder="e.g. Lahore"
+                    placeholder="City"
                     value={location}
                     onValueChange={setLocation}
                     className="!max-w-none"
@@ -361,14 +362,14 @@ export const ProjectsView: React.FC = () => {
                   Client / Owner
                 </label>
                 <Input
-                  placeholder="e.g. Haris Ali"
+                  placeholder="Client name"
                   value={clientName}
                   onValueChange={setClientName}
                   className="!max-w-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--lg-separator)]">
+              <div className="flex items-center justify-end gap-2.5 pt-2">
                 <Button
                   variant="glass"
                   type="button"

@@ -12,7 +12,7 @@ import { DomainUseCases } from '@/domain/usecases';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useSnackbar } from '@/app/providers/SnackbarProvider';
 import { Button, Input, SegmentedControl } from 'glisse';
-import { X, AlertCircle } from 'lucide-react';
+import { X, AlertCircle, Calendar } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
 import { registerMemoryCacheClearer, awaitLocalCommit } from '@/data/sync/dataWipeService';
 
@@ -264,7 +264,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                 Item Description *
               </label>
               <Input
-                placeholder="e.g. Falcon Cement (Grade 53)"
+                placeholder="Cement, steel"
                 value={title}
                 onValueChange={(val) => {
                   setTitle(val);
@@ -293,7 +293,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                   Unit
                 </label>
                 <Input
-                  placeholder="bags/tons"
+                  placeholder="bags"
                   value={unit}
                   onValueChange={setUnit}
                   className="!max-w-none"
@@ -322,8 +322,8 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
             <Input
               placeholder={
                 entryType === 'income'
-                  ? 'e.g. Client advance, salary, or cash deposit'
-                  : 'e.g. Fuel for generator or site lunch'
+                  ? 'Salary, advance'
+                  : 'Fuel, groceries'
               }
               value={title}
               onValueChange={setTitle}
@@ -355,6 +355,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                 type="date"
                 value={date}
                 onValueChange={setDate}
+                icon={<Calendar className="w-4 h-4" />}
                 className="!max-w-none"
               />
             </div>
@@ -371,7 +372,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                 onChange={(e) => setProjectId(e.target.value)}
                 className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
               >
-                <option value="">Personal / General Overhead</option>
+                <option value="">Personal</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -400,14 +401,14 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
 
             <div className={entryType === 'obligation' ? 'block' : 'hidden'}>
               <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1 min-h-[1.75rem] flex items-end">
-                Supplier / Vendor Contact
+                Contact
               </label>
               <select
                 value={contactId}
                 onChange={(e) => setContactId(e.target.value)}
                 className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
               >
-                <option value="">None / Anonymous</option>
+                <option value="">None</option>
                 {contacts.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -458,17 +459,17 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
           {/* Notes / Memo */}
           <div>
             <label className="block text-[11px] font-semibold text-[var(--lg-muted)] uppercase tracking-wider mb-1">
-              Notes / Reference (Optional)
+              Notes / Reference
             </label>
             <Input
-              placeholder="e.g. Invoice #982 or site supervisor clearance"
+              placeholder="Add a note"
               value={notes}
               onValueChange={setNotes}
               className="!max-w-none"
             />
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--lg-separator)]">
+          <div className="flex items-center justify-end gap-2.5 pt-2">
             <Button
               variant="glass"
               type="button"

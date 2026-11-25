@@ -9,7 +9,7 @@
 | **Phase 2** | Domain Foundation & Accounting Engine | **Completed** | 100% pass on accounting invariant unit tests (20/20) |
 | **Phase 3** | Firestore Repositories & Security Rules | **Completed** | Clean user-scoped rules published & repositories implemented |
 | **Phase 4** | Core Features (Projects, Contacts, Accounts, Ledger) | **Completed** | Multi-project isolation, latest payment, transfer & Quick Add verified |
-| **Phase 5** | Dashboard, Search, Budgets, Reports & CSV Export | **Next Up** | Reconciled charts, normalized search, CSV download |
+| **Phase 5** | Dashboard, Search, Budgets, Reports & CSV Export | **In Progress** | Reconciled charts, normalized search, CSV download |
 | **Phase 6** | Offline Hardening, iOS PWA & Vercel Release | Pending | iPhone Safari & installed PWA verification |
 | **Phase 7** | A11y, Performance Audit, Security & Final Handoff | Pending | WCAG AA compliance, Lighthouse score > 90 |
 
@@ -72,12 +72,12 @@
 - [x] Build Instant Latest Payment lookup widget.
 
 ### Phase 5: Dashboard, Search, Budgets & Reports
-- [ ] Build Executive Dashboard with dynamic time horizons and project filters.
+- [x] Build Executive Dashboard with dynamic time horizons and project filters.
 - [ ] Build normalized in-memory search across all financial entities.
 - [ ] Build Budget engine with visual warning thresholds (80%, 90%, 100%).
 - [ ] Build Financial Reports (P&L, Cash Flow, Project Cost Comparisons).
-- [ ] Build CSV Export for transactions, projects, and contact ledgers.
-- [ ] Build JSON backup export and validated restore preview.
+- [ ] Build CSV Export for transactions, projects, and contact ledgers. *(Transactions CSV completed; projects & contact ledgers pending)*
+- [x] Build JSON backup export and validated restore preview.
 
 ### Phase 6: Offline Hardening & Deployment
 - [ ] Verify offline persistence in airplane mode.

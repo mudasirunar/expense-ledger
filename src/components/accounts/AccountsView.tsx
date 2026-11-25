@@ -13,7 +13,8 @@ import {
   Smartphone, 
   Banknote, 
   X, 
-  AlertCircle
+  AlertCircle,
+  Calendar
 } from 'lucide-react';
 import { ModalPortal } from '@/components/common/ModalPortal';
 import { registerMemoryCacheClearer, awaitLocalCommit } from '@/data/sync/dataWipeService';
@@ -370,7 +371,7 @@ export const AccountsView: React.FC = () => {
                   Account Name *
                 </label>
                 <Input
-                  placeholder="e.g. Meezan Main Checking"
+                  placeholder="Account name"
                   value={name}
                   onValueChange={setName}
                   className="!max-w-none"
@@ -406,7 +407,7 @@ export const AccountsView: React.FC = () => {
                     Institution / Bank
                   </label>
                   <Input
-                    placeholder="e.g. Meezan Bank"
+                    placeholder="Bank name"
                     value={institution}
                     onValueChange={setInstitution}
                     className="!max-w-none"
@@ -417,7 +418,7 @@ export const AccountsView: React.FC = () => {
                     Account # / IBAN
                   </label>
                   <Input
-                    placeholder="e.g. 0123456789"
+                    placeholder="Account #"
                     value={accountNumber}
                     onValueChange={setAccountNumber}
                     className="!max-w-none"
@@ -438,7 +439,7 @@ export const AccountsView: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--lg-separator)]">
+              <div className="flex items-center justify-end gap-2.5 pt-2">
                 <Button
                   variant="glass"
                   type="button"
@@ -499,16 +500,22 @@ export const AccountsView: React.FC = () => {
                   </label>
                   <select
                     value={sourceAccountId}
-                    onChange={(e) => setSourceAccountId(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setSourceAccountId(next);
+                      if (next && next === targetAccountId) setTargetAccountId('');
+                    }}
                     className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
                     required
                   >
                     <option value="">Select source</option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} ({Money.format(a.currentBalanceMinor)})
-                      </option>
-                    ))}
+                    {accounts
+                      .filter((a) => a.id !== targetAccountId)
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} ({Money.format(a.currentBalanceMinor)})
+                        </option>
+                      ))}
                   </select>
                 </div>
 
@@ -518,16 +525,22 @@ export const AccountsView: React.FC = () => {
                   </label>
                   <select
                     value={targetAccountId}
-                    onChange={(e) => setTargetAccountId(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setTargetAccountId(next);
+                      if (next && next === sourceAccountId) setSourceAccountId('');
+                    }}
                     className="w-full h-10 px-3 rounded-2xl theme-select text-xs font-medium focus:outline-none cursor-pointer"
                     required
                   >
                     <option value="">Select destination</option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} ({Money.format(a.currentBalanceMinor)})
-                      </option>
-                    ))}
+                    {accounts
+                      .filter((a) => a.id !== sourceAccountId)
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} ({Money.format(a.currentBalanceMinor)})
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>
@@ -554,6 +567,7 @@ export const AccountsView: React.FC = () => {
                     type="date"
                     value={transferDate}
                     onValueChange={setTransferDate}
+                    icon={<Calendar className="w-4 h-4" />}
                     className="!max-w-none"
                   />
                 </div>
@@ -564,14 +578,14 @@ export const AccountsView: React.FC = () => {
                   Memo / Reference Notes
                 </label>
                 <Input
-                  placeholder="e.g. ATM cash withdrawal for site petty cash"
+                  placeholder="Add a note"
                   value={transferNotes}
                   onValueChange={setTransferNotes}
                   className="!max-w-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--lg-separator)]">
+              <div className="flex items-center justify-end gap-2.5 pt-2">
                 <Button
                   variant="glass"
                   type="button"

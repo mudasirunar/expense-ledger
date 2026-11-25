@@ -8,6 +8,7 @@ import {
   query,
   where,
   orderBy,
+  onSnapshot,
   QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '@/data/firebase/firestoreClient';
@@ -52,6 +53,27 @@ export class FirestoreObligationRepository implements IObligationRepository {
     return snap.docs
       .map((d) => d.data() as Obligation)
       .filter((item) => isRecordActive(userId, item));
+  }
+
+  subscribe(
+    userId: string,
+    onUpdate: (obligations: Obligation[]) => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    const q = query(this.getUserObligationsCollection(userId), orderBy('date', 'desc'));
+    return onSnapshot(
+      q,
+      (snap) => {
+        onUpdate(
+          snap.docs
+            .map((d) => d.data() as Obligation)
+            .filter((item) => isRecordActive(userId, item))
+        );
+      },
+      (err) => {
+        if (onError) onError(err);
+      }
+    );
   }
 
   async create(userId: string, obligation: Obligation): Promise<void> {
