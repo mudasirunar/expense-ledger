@@ -74,15 +74,15 @@ To prevent the jarring "Flash of Dark Mode" or "Flash of Light Mode" when a user
 
 ### 3.1 Bottom Navigation Bar (Mobile)
 Fixed at the bottom of the screen, floating above the home indicator bar:
-1. 🏠 **Dashboard:** Consolidated financial position and quick metrics.
-2. 🏗️ **Projects:** Active projects list, budget health, project ledgers.
-3. ➕ **Quick Add (Center Action Button):** Floating elevated action button opening a fast-entry modal (Expense, Purchase Obligation, Payment, Income, Transfer).
-4. 👥 **Contacts:** Subcontractors, suppliers, workers, and clients.
-5. 💳 **Accounts:** Cash on hand, bank accounts, and mobile wallets.
+1. 🏠 **Overview (`#/dashboard`):** Consolidated Executive Dashboard, analytics charts, recent activity, and Contacts reference.
+2. 🏗️ **Projects (`#/projects`):** Active projects list, budget health, project ledgers.
+3. 💳 **Accounts (`#/accounts`):** Cash on hand, bank accounts, mobile wallets, and inter-account transfers.
+4. 👤 **Profile (`#/profile`):** User avatar with live glowing sync status ring (Green = Synced, Amber pulsing = Syncing, Red = Offline), Appearance picker, Backup/Restore/Excel Export, and Sign Out.
+5. ➕ **Quick Add (Trailing Circular Action Button):** Opens the fast-entry modal (`Expense`, `Income`, `Bill`, `Payment`).
 
-### 3.2 Top App Bar
-* **Left:** App Title / Current View context.
-* **Right:** Sync status badge (Green/Amber/Red) + Search icon + Manual refresh button.
+### 3.2 Top App Bar & Standalone Screens
+* **Scrollable Top Bar:** On all main tabs and standalone screens (such as **History** `#/history`), the status-bar spacer and title header scroll smoothly up with the body.
+* **Standalone Screens (`#/history`):** Circular Glisse `<` glass back button on the left, title, and circular Glisse action button on the right (e.g., Export Excel). No bottom navigation bar.
 
 ---
 

@@ -71,13 +71,15 @@
 - [x] Build Obligation & Payment Entry modal (purchases, staged payments, advances) with Glisse inputs & buttons (`QuickAddModal.tsx`).
 - [x] Build Instant Latest Payment lookup widget.
 
-### Phase 5: Dashboard, Search, Budgets & Reports
-- [x] Build Executive Dashboard with dynamic time horizons and project filters.
+### Phase 5: Dashboard, Search, Budgets & Reports (`v0.3.0` In Progress)
+- [x] Build Executive Dashboard with dynamic time horizons (`All Time`, `This Month`, `Today`), scope filters (`All`, `Personal`, Projects), Cash Flow Trend chart, Spending Donut, Liquidity Mix (top 5), Project Budget Health (top 5 with 80%/90%/100% thresholds), Payables/Receivables, and Recent Activity (last 5).
+- [x] Build standalone History screen (`#/history`) with Transaction Detail Bottom Sheet & 9:16 Bank Slip PNG receipt sharing (`receiptShareService.ts`).
 - [ ] Build normalized in-memory search across all financial entities.
-- [ ] Build Budget engine with visual warning thresholds (80%, 90%, 100%).
+- [ ] Build dedicated periodic Budget engine (Personal category budgets + visual warning alerts). *(Project budget 80%/90%/100% alerts already live on Dashboard)*
 - [ ] Build Financial Reports (P&L, Cash Flow, Project Cost Comparisons).
-- [ ] Build CSV Export for transactions, projects, and contact ledgers. *(Transactions CSV completed; projects & contact ledgers pending)*
-- [x] Build JSON backup export and validated restore preview.
+- [x] Build styled Multi-Sheet Excel Export (`.xlsx`: Summary, Expenses & Income, Transfers, Bills, Payments) + RFC-4180 CSV builder (`backupRestoreService.ts`).
+- [x] Build JSON backup export and validated Smart-Merge restore preview (`backupRestoreService.ts`).
+- [ ] Wire Bill Settlement UI (`Pay Bill` in History sheet & `Apply to Open Bill` in Quick Add Payment tab using `AllocationEngine`).
 
 ### Phase 6: Offline Hardening & Deployment
 - [ ] Verify offline persistence in airplane mode.
