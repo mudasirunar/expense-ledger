@@ -29,6 +29,7 @@ export interface SearchLedgerInput {
   transactions: readonly Transaction[];
   obligations: readonly Obligation[];
   payments: readonly Payment[];
+  now?: Date;
 }
 
 export interface SearchResultsBundle {
@@ -77,12 +78,140 @@ export function tokenizeQuery(query: string): string[] {
   return cleaned ? cleaned.split(' ').filter(Boolean) : [];
 }
 
+const MONTH_NAMES = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+] as const;
+
+const MONTH_SHORT = [
+  'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+  'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+] as const;
+
+const WEEKDAY_NAMES = [
+  'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+] as const;
+
+function toLocalDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Expands a YYYY-MM-DD date string into natural searchable tokens:
+ * e.g. "2026-04-12" -> "2026-04-12 2026 april apr 12 sunday today"
+ */
+export function searchableDateTokens(
+  rawDate: string | undefined,
+  todayKey: string,
+  yesterdayKey: string
+): string {
+  if (!rawDate) return '';
+  const key = rawDate.slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!match) return key;
+
+  const year = Number(match[1]);
+  const monthIdx = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  if (monthIdx < 0 || monthIdx > 11 || day < 1 || day > 31) return key;
+
+  const parsed = new Date(year, monthIdx, day);
+  const tokens = [
+    key,
+    String(year),
+    MONTH_NAMES[monthIdx],
+    MONTH_SHORT[monthIdx],
+    String(day),
+    match[3],
+    WEEKDAY_NAMES[parsed.getDay()],
+  ];
+
+  if (key === todayKey) tokens.push('today');
+  else if (key === yesterdayKey) tokens.push('yesterday');
+
+  return tokens.join(' ');
+}
+
+/**
+ * Computes Optimal String Alignment (Damerau-Levenshtein) edit distance
+ * with early exit when distance exceeds `maxDist`.
+ * Counts insertion, deletion, substitution, and adjacent transposition each as 1 edit.
+ */
+export function damerauLevenshteinDistance(
+  a: string,
+  b: string,
+  maxDist: number
+): number {
+  const lenA = a.length;
+  const lenB = b.length;
+  if (Math.abs(lenA - lenB) > maxDist) return maxDist + 1;
+  if (a === b) return 0;
+
+  const dp: number[][] = Array.from({ length: lenA + 1 }, () =>
+    new Array<number>(lenB + 1).fill(0)
+  );
+
+  for (let i = 0; i <= lenA; i++) dp[i][0] = i;
+  for (let j = 0; j <= lenB; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= lenA; i++) {
+    let rowMin = maxDist + 1;
+    for (let j = 1; j <= lenB; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let val = Math.min(
+        dp[i - 1][j] + 1,      // deletion
+        dp[i][j - 1] + 1,      // insertion
+        dp[i - 1][j - 1] + cost // substitution
+      );
+      if (
+        i > 1 &&
+        j > 1 &&
+        a[i - 1] === b[j - 2] &&
+        a[i - 2] === b[j - 1]
+      ) {
+        val = Math.min(val, dp[i - 2][j - 2] + 1); // transposition
+      }
+      dp[i][j] = val;
+      if (val < rowMin) rowMin = val;
+    }
+    if (rowMin > maxDist) return maxDist + 1;
+  }
+
+  return dp[lenA][lenB];
+}
+
 function matchesAllTokens(haystack: string, tokens: readonly string[]): boolean {
   if (tokens.length === 0) return false;
   const norm = normalizeSearchText(haystack);
+  let words: string[] | null = null;
+
   for (const token of tokens) {
-    if (!norm.includes(token)) return false;
+    // Fast exact / substring match first
+    if (norm.includes(token)) continue;
+
+    // Fuzzy typo fallback only for non-numeric words with 4+ letters
+    if (token.length < 4 || /\d/.test(token)) return false;
+
+    if (!words) {
+      words = norm.split(' ').filter(Boolean);
+    }
+
+    const maxDist = token.length >= 7 ? 2 : 1;
+    let fuzzyMatched = false;
+    for (const word of words) {
+      if (word.length < 3 || /\d/.test(word)) continue;
+      if (damerauLevenshteinDistance(token, word, maxDist) <= maxDist) {
+        fuzzyMatched = true;
+        break;
+      }
+    }
+
+    if (!fuzzyMatched) return false;
   }
+
   return true;
 }
 
@@ -95,6 +224,7 @@ export function searchLedgerEntities(input: SearchLedgerInput): SearchResultsBun
     transactions,
     obligations,
     payments,
+    now = new Date(),
   } = input;
 
   const tokens = tokenizeQuery(query);
@@ -109,6 +239,11 @@ export function searchLedgerEntities(input: SearchLedgerInput): SearchResultsBun
       totalCount: 0,
     };
   }
+
+  const todayKey = toLocalDateKey(now);
+  const yesterdayKey = toLocalDateKey(
+    new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  );
 
   const projectMap = new Map(projects.map((p) => [p.id, p]));
   const accountMap = new Map(accounts.map((a) => [a.id, a]));
@@ -135,7 +270,7 @@ export function searchLedgerEntities(input: SearchLedgerInput): SearchResultsBun
       item.title,
       item.subtitle,
       item.badge,
-      item.date,
+      searchableDateTokens(item.date, todayKey, yesterdayKey),
       searchableAmountTokens(item.amountMinor),
     ];
 
@@ -184,6 +319,7 @@ export function searchLedgerEntities(input: SearchLedgerInput): SearchResultsBun
       p.clientName || '',
       p.location || '',
       p.status,
+      searchableDateTokens(p.startDate, todayKey, yesterdayKey),
       searchableAmountTokens(p.budgetMinor),
     ].join(' ');
     return matchesAllTokens(haystack, tokens);

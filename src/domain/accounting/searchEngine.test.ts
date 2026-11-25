@@ -158,4 +158,95 @@ describe('Normalized In-Memory Search Engine', () => {
     });
     expect(res.totalCount).toBe(0);
   });
+
+  it('matches natural dates including month names, today, and yesterday', () => {
+    const now = new Date(2026, 3, 12); // Apr 12, 2026
+
+    const byMonth = searchLedgerEntities({
+      query: 'april',
+      accounts,
+      projects,
+      contacts,
+      transactions,
+      obligations,
+      payments,
+      now,
+    });
+    expect(byMonth.activity).toHaveLength(2);
+
+    const byToday = searchLedgerEntities({
+      query: 'today dinner',
+      accounts,
+      projects,
+      contacts,
+      transactions,
+      obligations,
+      payments,
+      now,
+    });
+    expect(byToday.activity).toHaveLength(1);
+    expect(byToday.activity[0].id).toBe('tx-tx-1');
+
+    const byYesterday = searchLedgerEntities({
+      query: 'yesterday',
+      accounts,
+      projects,
+      contacts,
+      transactions,
+      obligations,
+      payments,
+      now: new Date(2026, 3, 13), // Apr 13 -> Apr 12 is yesterday
+    });
+    expect(byYesterday.activity.some((a) => a.id === 'tx-tx-1')).toBe(true);
+  });
+
+  it('tolerates spelling typos via Damerau-Levenshtein while keeping numbers exact', () => {
+    // Missing letter ("cemnt"), swapped letters ("cemnet"), wrong letter ("vila")
+    const resMissing = searchLedgerEntities({
+      query: 'cemnt vila',
+      accounts,
+      projects,
+      contacts,
+      transactions,
+      obligations,
+      payments,
+    });
+    expect(resMissing.activity.some((a) => a.id === 'ob-obl-1')).toBe(true);
+
+    const resSwapped = searchLedgerEntities({
+      query: 'cemnet',
+      accounts,
+      projects,
+      contacts,
+      transactions,
+      obligations,
+      payments,
+    });
+    expect(resSwapped.activity.some((a) => a.id === 'ob-obl-1')).toBe(true);
+    expect(resSwapped.contacts.some((c) => c.id === 'cnt-1')).toBe(true);
+
+    // 2 typos allowed on 7+ char words ("supliers" / "supleirs" -> "suppliers")
+    const resLongTypo = searchLedgerEntities({
+      query: 'supleirs',
+      accounts,
+      projects,
+      contacts,
+      transactions,
+      obligations,
+      payments,
+    });
+    expect(resLongTypo.contacts).toHaveLength(1);
+
+    // Numbers must stay exact ("26000" must NOT fuzzy-match "25000")
+    const resWrongNum = searchLedgerEntities({
+      query: '26000',
+      accounts,
+      projects,
+      contacts,
+      transactions,
+      obligations,
+      payments,
+    });
+    expect(resWrongNum.totalCount).toBe(0);
+  });
 });
